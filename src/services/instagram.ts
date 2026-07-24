@@ -11,7 +11,7 @@ export interface InstagramMetadata {
 }
 
 export interface DataSourceInfo {
-  source: 'graphql' | 'oembed' | 'apify'
+  source: 'graphql' | 'apify'
   fields: string[]
   cost: 'free' | 'paid'
   timestamp: number
@@ -24,9 +24,16 @@ function extractShortcode(url: string): string | null {
   return match?.[1] || null
 }
 
+function normalizeWorkerUrl(url: string): string {
+  const trimmed = url.trim()
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed
+  return `https://${trimmed}`
+}
+
 async function fetchViaGraphQL(workerUrl: string, shortcode: string): Promise<{ result: InstagramMetadata | null; fields: string[] }> {
+  const normalizedUrl = normalizeWorkerUrl(workerUrl)
   try {
-    const res = await fetch(workerUrl, {
+    const res = await fetch(normalizedUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ shortcode }),
@@ -55,7 +62,6 @@ async function fetchViaGraphQL(workerUrl: string, shortcode: string): Promise<{ 
       duration: media.video_duration || 0,
     }
 
-    if (result.title) fields.push('title')
     if (result.creatorHandle) fields.push('creatorHandle')
     if (result.caption) fields.push('caption')
     if (result.hashtags.length > 0) fields.push('hashtags')
@@ -64,36 +70,6 @@ async function fetchViaGraphQL(workerUrl: string, shortcode: string): Promise<{ 
     if (result.likeCount > 0) fields.push('likeCount')
     if (result.commentCount > 0) fields.push('commentCount')
     if (result.duration > 0) fields.push('duration')
-
-    return { result, fields }
-  } catch {
-    return { result: null, fields: [] }
-  }
-}
-
-async function fetchViaoEmbed(url: string): Promise<{ result: InstagramMetadata | null; fields: string[] }> {
-  try {
-    const res = await fetch(
-      `https://graph.facebook.com/v25.0/instagram_oembed?url=${encodeURIComponent(url)}&fields=author_name,thumbnail_url,html`
-    )
-    if (!res.ok) return { result: null, fields: [] }
-    const data = await res.json()
-
-    const fields: string[] = []
-    const result: InstagramMetadata = {
-      title: '',
-      creatorHandle: data.author_name || '',
-      caption: '',
-      hashtags: [],
-      thumbnailUrl: data.thumbnail_url || '',
-      videoUrl: '',
-      likeCount: 0,
-      commentCount: 0,
-      duration: 0,
-    }
-
-    if (result.creatorHandle) fields.push('creatorHandle')
-    if (result.thumbnailUrl) fields.push('thumbnailUrl')
 
     return { result, fields }
   } catch {
@@ -116,7 +92,6 @@ export async function fetchInstagramMetadata(
     if (shortcode) {
       const { result, fields } = await fetchViaGraphQL(workerUrl, shortcode)
       if (result) {
-        if (result.title) merged.title = result.title
         if (result.creatorHandle) merged.creatorHandle = result.creatorHandle
         if (result.caption) merged.caption = result.caption
         if (result.hashtags.length > 0) merged.hashtags = result.hashtags
@@ -132,17 +107,6 @@ export async function fetchInstagramMetadata(
     }
   }
 
-  if (!merged.creatorHandle) {
-    const { result, fields } = await fetchViaoEmbed(url)
-    if (result) {
-      if (!merged.creatorHandle && result.creatorHandle) merged.creatorHandle = result.creatorHandle
-      if (!merged.thumbnailUrl && result.thumbnailUrl) merged.thumbnailUrl = result.thumbnailUrl
-      if (fields.length > 0) {
-        sources.push({ source: 'oembed', fields, cost: 'free', timestamp: Date.now() })
-      }
-    }
-  }
-
   const hasData = merged.creatorHandle || merged.caption || merged.thumbnailUrl
   return {
     metadata: hasData ? merged : null,
@@ -152,4 +116,19 @@ export async function fetchInstagramMetadata(
 
 export function isInstagramUrl(url: string): boolean {
   return /instagram\.com\/(reel|p|tv)\//.test(url)
+}
+
+export function validateWorkerUrl(url: string): { valid: boolean; error?: string } {
+  const trimmed = url.trim()
+  if (!trimmed) return { valid: false, error: 'Worker URL is required' }
+  const normalized = normalizeWorkerUrl(trimmed)
+  try {
+    new URL(normalized)
+  } catch {
+    return { valid: false, error: 'Invalid URL format' }
+  }
+  if (!normalized.includes('workers.dev')) {
+    return { valid: false, error: 'URL must be a Cloudflare Workers URL (*.workers.dev)' }
+  }
+  return { valid: true }
 }

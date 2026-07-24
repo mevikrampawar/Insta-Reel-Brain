@@ -46,58 +46,56 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
     currentUrlRef.current = targetUrl
     setError('')
 
-    const freeSources: DataSourceInfo[] = []
     let title = '', creatorHandle = '', caption = '', hashtags: string[] = []
     let thumbnailUrl = '', videoUrl = '', likeCount = 0, commentCount = 0, duration = 0, transcript = ''
+    const allSources: DataSourceInfo[] = []
 
-    setPhase('fetching-free')
-    try {
-      const { metadata, sources: freeSrc } = await fetchInstagramMetadata(targetUrl, workerUrl)
-      freeSources.push(...freeSrc)
-      if (metadata) {
-        title = metadata.title
-        creatorHandle = metadata.creatorHandle
-        caption = metadata.caption
-        hashtags = metadata.hashtags
-        thumbnailUrl = metadata.thumbnailUrl
-        videoUrl = metadata.videoUrl
-        likeCount = metadata.likeCount
-        commentCount = metadata.commentCount
-        duration = metadata.duration
+    if (workerUrl) {
+      setPhase('fetching-free')
+      try {
+        const { metadata, sources } = await fetchInstagramMetadata(targetUrl, workerUrl)
+        allSources.push(...sources)
+        if (metadata) {
+          title = metadata.title
+          creatorHandle = metadata.creatorHandle
+          caption = metadata.caption
+          hashtags = metadata.hashtags
+          thumbnailUrl = metadata.thumbnailUrl
+          videoUrl = metadata.videoUrl
+          likeCount = metadata.likeCount
+          commentCount = metadata.commentCount
+          duration = metadata.duration
+        }
+      } catch {
+        // continue to apify
       }
-    } catch {
-      // silently continue
     }
 
     const hasTranscript = caption.length > 20
     if (!hasTranscript && apifyApiKey) {
       setPhase('fetching-apify')
       try {
-        const { result: apifyResult, sources: apifySrc } = await fetchViaApify(apifyApiKey, targetUrl)
-        freeSources.push(...apifySrc)
-        if (apifyResult) {
-          if (!creatorHandle && apifyResult.creatorHandle) creatorHandle = apifyResult.creatorHandle
-          if (!caption && apifyResult.caption) caption = apifyResult.caption
-          if (apifyResult.hashtags.length > 0 && hashtags.length === 0) hashtags = apifyResult.hashtags
-          if (!thumbnailUrl && apifyResult.thumbnailUrl) thumbnailUrl = apifyResult.thumbnailUrl
-          if (!videoUrl && apifyResult.videoUrl) videoUrl = apifyResult.videoUrl
-          if (!likeCount && apifyResult.likeCount) likeCount = apifyResult.likeCount
-          if (!commentCount && apifyResult.commentCount) commentCount = apifyResult.commentCount
-          if (!duration && apifyResult.duration) duration = apifyResult.duration
-          transcript = apifyResult.transcript
-          if (apifyResult.title && !title) title = apifyResult.title
+        const { result, sources } = await fetchViaApify(apifyApiKey, targetUrl)
+        allSources.push(...sources)
+        if (result) {
+          if (!creatorHandle && result.creatorHandle) creatorHandle = result.creatorHandle
+          if (!caption && result.caption) caption = result.caption
+          if (result.hashtags.length > 0 && hashtags.length === 0) hashtags = result.hashtags
+          if (!thumbnailUrl && result.thumbnailUrl) thumbnailUrl = result.thumbnailUrl
+          if (!videoUrl && result.videoUrl) videoUrl = result.videoUrl
+          if (!likeCount && result.likeCount) likeCount = result.likeCount
+          if (!commentCount && result.commentCount) commentCount = result.commentCount
+          if (!duration && result.duration) duration = result.duration
+          transcript = result.transcript
+          if (result.title && !title) title = result.title
         }
       } catch {
-        // silently continue
+        // continue
       }
     }
 
-    if (title) {
-      // nothing
-    } else if (caption) {
-      title = caption.split('\n')[0]?.slice(0, 120) || ''
-    } else {
-      title = `Reel by @${creatorHandle || 'unknown'}`
+    if (!title) {
+      title = caption ? caption.split('\n')[0]?.slice(0, 120) || '' : `Reel by @${creatorHandle || 'unknown'}`
     }
 
     const data: FetchedData = {
@@ -106,7 +104,7 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
     }
 
     setFetched(data)
-    setSources(freeSources)
+    setSources(allSources)
     setPhase('ready')
     currentUrlRef.current = ''
   }, [workerUrl, apifyApiKey])
@@ -185,21 +183,8 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
     }
   }
 
-  const SourceBadge = ({ source, fields }: { source: string; fields: string[] }) => {
-    const isFree = source !== 'apify'
-    return (
-      <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${
-        isFree ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
-      }`}>
-        {isFree ? <Globe size={10} /> : <Bot size={10} />}
-        <span className="font-medium">{source}</span>
-        <span className="text-zinc-500">·</span>
-        <span>{fields.length} fields</span>
-        {isFree ? <span className="text-emerald-600">FREE</span> : <span className="text-orange-600">PAID</span>}
-      </div>
-    )
-  }
+  const hasWorker = !!workerUrl.trim()
+  const hasApify = !!apifyApiKey.trim()
 
   return (
     <div className="max-w-2xl mx-auto p-8 space-y-6">
@@ -213,13 +198,23 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
         </div>
       </div>
 
-      {/* Steps indicator */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-xs text-zinc-400 space-y-1">
-        <p className="font-medium text-zinc-300 mb-1">How it works:</p>
-        <p>1. Paste the Instagram Reel link</p>
-        <p>2. We auto-fetch metadata from free sources first, then Apify if needed</p>
-        <p>3. Click "Analyze" — AI generates summary, tags, embeddings, and more</p>
+      {/* Config status */}
+      <div className="flex items-center gap-3 text-xs">
+        <span className={`flex items-center gap-1 ${hasWorker ? 'text-emerald-400' : 'text-zinc-500'}`}>
+          {hasWorker ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
+          GraphQL Worker {hasWorker ? '✓' : '(not set)'}
+        </span>
+        <span className={`flex items-center gap-1 ${hasApify ? 'text-emerald-400' : 'text-zinc-500'}`}>
+          {hasApify ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
+          Apify {hasApify ? '✓' : '(not set)'}
+        </span>
       </div>
+
+      {!hasWorker && !hasApify && (
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-400">
+          No data sources configured. Go to <strong>Settings</strong> to add a Cloudflare Worker and/or Apify key for auto-fetch.
+        </div>
+      )}
 
       {/* URL Input */}
       <div>
@@ -239,14 +234,14 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
       {phase === 'fetching-free' && (
         <div className="flex items-center gap-2 text-sm text-cyan-400 bg-cyan-500/5 border border-cyan-500/20 rounded-lg p-3">
           <Loader2 size={14} className="animate-spin" />
-          <span>Fetching from free sources (GraphQL + oEmbed)...</span>
+          <span>Fetching metadata from Cloudflare Worker...</span>
         </div>
       )}
 
       {phase === 'fetching-apify' && (
         <div className="flex items-center gap-2 text-sm text-orange-400 bg-orange-500/5 border border-orange-500/20 rounded-lg p-3">
           <Loader2 size={14} className="animate-spin" />
-          <span>Fetching transcript from Apify...</span>
+          <span>Fetching transcript from Apify (~30s)...</span>
         </div>
       )}
 
@@ -257,7 +252,17 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
           {sources.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {sources.map((s, i) => (
-                <SourceBadge key={i} source={s.source} fields={s.fields} />
+                <div key={i} className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${
+                  s.cost === 'free'
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                }`}>
+                  {s.source === 'graphql' ? <Globe size={10} /> : <Bot size={10} />}
+                  <span className="font-medium">{s.source}</span>
+                  <span className="text-zinc-500">·</span>
+                  <span>{s.fields.length} fields</span>
+                  {s.cost === 'free' ? <span className="text-emerald-600">FREE</span> : <span className="text-orange-600">PAID</span>}
+                </div>
               ))}
             </div>
           )}
@@ -265,7 +270,7 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
           {sources.length === 0 && (
             <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/5 border border-amber-500/20 rounded-lg p-3">
               <AlertCircle size={12} />
-              <span>No metadata could be fetched. Add a Cloudflare Worker or Apify key in Settings for better results.</span>
+              <span>No metadata fetched. Add a Cloudflare Worker or Apify key in Settings.</span>
             </div>
           )}
 

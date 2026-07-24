@@ -1,4 +1,5 @@
 const APIFY_BASE = 'https://api.apify.com/v2'
+const ACTOR_ID = 'apify/instagram-reel-scraper'
 
 export interface ApifyResult {
   title: string
@@ -14,7 +15,7 @@ export interface ApifyResult {
 }
 
 export interface DataSourceInfo {
-  source: 'graphql' | 'oembed' | 'apify'
+  source: 'graphql' | 'apify'
   fields: string[]
   cost: 'free' | 'paid'
   timestamp: number
@@ -29,18 +30,18 @@ async function pollRun(runUrl: string, token: string, maxWaitSec = 120): Promise
 
   while (Date.now() < deadline) {
     const res = await fetch(`${runUrl}?token=${token}`)
-    if (!res.ok) throw new Error(`Apify run poll failed: ${res.status}`)
+    if (!res.ok) throw new Error(`Apify poll failed: ${res.status}`)
     const data = await res.json()
     const status = data.data?.status
 
     if (status === 'SUCCEEDED') return data.data.defaultDatasetId
     if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-      throw new Error(`Apify run ${status}`)
+      throw new Error(`Apify run ${status.toLowerCase()}`)
     }
 
     await sleep(2000)
   }
-  throw new Error('Apify run timed out')
+  throw new Error('Apify run timed out (2 min)')
 }
 
 export async function fetchViaApify(
@@ -51,21 +52,21 @@ export async function fetchViaApify(
 
   try {
     const runRes = await fetch(
-      `${APIFY_BASE}/acts/crawlerbros~instagram-post-scraper/runs?token=${apifyApiKey}`,
+      `${APIFY_BASE}/acts/${ACTOR_ID}/runs?token=${apifyApiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          postUrls: [url],
+          directUrls: [url],
           addTranscription: true,
-          proxyConfig: { useApifyProxy: true },
+          proxyConfiguration: { useApifyProxy: true },
         }),
       },
     )
 
     if (!runRes.ok) {
       const err = await runRes.json().catch(() => ({}))
-      throw new Error(err.error?.message || `Apify run start failed: ${runRes.status}`)
+      throw new Error(err.error?.message || `Apify run failed: ${runRes.status}`)
     }
 
     const runData = await runRes.json()
@@ -74,7 +75,7 @@ export async function fetchViaApify(
     const datasetRes = await fetch(
       `${APIFY_BASE}/datasets/${datasetId}/items?token=${apifyApiKey}&format=json`,
     )
-    if (!datasetRes.ok) throw new Error(`Apify dataset fetch failed: ${datasetRes.status}`)
+    if (!datasetRes.ok) throw new Error(`Apify dataset failed: ${datasetRes.status}`)
 
     const items = await datasetRes.json()
     if (!items || items.length === 0) return { result: null, sources }
@@ -89,7 +90,7 @@ export async function fetchViaApify(
     })
 
     const caption = item.caption || item.text || ''
-    const hashtags = [
+    const hashtags = item.hashtags || [
       ...new Set<string>(
         (caption.match(/#[\w]+/g) || []).map((h: string) => h.slice(1).toLowerCase())
       ),
@@ -98,44 +99,19 @@ export async function fetchViaApify(
     return {
       result: {
         title: caption.split('\n')[0]?.slice(0, 150) || '',
-        creatorHandle: item.ownerUsername || item.authorUsername || item.username || '',
+        creatorHandle: item.ownerUsername || item.owner?.username || '',
         caption,
-        hashtags,
+        hashtags: Array.isArray(hashtags) ? hashtags : [],
         thumbnailUrl: item.thumbnailUrl || item.displayUrl || '',
         videoUrl: item.videoUrl || item.downloadUrl || '',
         likeCount: item.likesCount || item.likeCount || 0,
         commentCount: item.commentsCount || item.commentCount || 0,
-        duration: item.videoDurationSec || item.duration || 0,
+        duration: item.videoDuration || item.videoDurationSec || 0,
         transcript: item.transcription || item.transcript || '',
       },
       sources,
     }
   } catch {
     return { result: null, sources }
-  }
-}
-
-export async function startApifyRun(
-  apifyApiKey: string,
-  url: string,
-): Promise<string | null> {
-  try {
-    const runRes = await fetch(
-      `${APIFY_BASE}/acts/crawlerbros~instagram-post-scraper/runs?token=${apifyApiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          postUrls: [url],
-          addTranscription: true,
-          proxyConfig: { useApifyProxy: true },
-        }),
-      },
-    )
-    if (!runRes.ok) return null
-    const data = await runRes.json()
-    return data.data?.defaultRunUrl || null
-  } catch {
-    return null
   }
 }
