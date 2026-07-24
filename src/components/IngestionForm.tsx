@@ -1,7 +1,10 @@
-import { useState } from 'react'
-import { Link, Loader2, AlertCircle, Sparkles, CheckCircle2, Video } from 'lucide-react'
+import { useState, useCallback, useRef } from 'react'
+import { Link, Loader2, AlertCircle, Sparkles, CheckCircle2, Video, Globe, Bot } from 'lucide-react'
 import type { Reel } from '../types'
 import { processReel } from '../services/ingestion'
+import { fetchInstagramMetadata, isInstagramUrl } from '../services/instagram'
+import { fetchViaApify } from '../services/apify'
+import type { DataSourceInfo } from '../services/instagram'
 
 interface Props {
   userId: string
@@ -9,20 +12,119 @@ interface Props {
   updateReel: (id: string, data: Partial<Reel>) => Promise<void>
   onDone: () => void
   apiKey: string
+  workerUrl: string
+  apifyApiKey: string
 }
 
-type Step = 'form' | 'processing' | 'done' | 'error'
+type Phase = 'idle' | 'fetching-free' | 'fetching-apify' | 'ready' | 'processing' | 'done' | 'error'
 
-export function IngestionForm({ addReel, updateReel, onDone, apiKey }: Props) {
-  const [step, setStep] = useState<Step>('form')
+interface FetchedData {
+  title: string
+  creatorHandle: string
+  caption: string
+  hashtags: string[]
+  thumbnailUrl: string
+  videoUrl: string
+  likeCount: number
+  commentCount: number
+  duration: number
+  transcript: string
+}
+
+export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, apifyApiKey }: Props) {
   const [url, setUrl] = useState('')
-  const [transcript, setTranscript] = useState('')
-  const [title, setTitle] = useState('')
-  const [creator, setCreator] = useState('')
-  const [caption, setCaption] = useState('')
-  const [hashtags, setHashtags] = useState('')
+  const [phase, setPhase] = useState<Phase>('idle')
+  const [fetched, setFetched] = useState<FetchedData | null>(null)
+  const [sources, setSources] = useState<DataSourceInfo[]>([])
   const [error, setError] = useState('')
   const [progress, setProgress] = useState('')
+  const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const currentUrlRef = useRef('')
+
+  const fetchAll = useCallback(async (targetUrl: string) => {
+    if (currentUrlRef.current === targetUrl) return
+    currentUrlRef.current = targetUrl
+    setError('')
+
+    const freeSources: DataSourceInfo[] = []
+    let title = '', creatorHandle = '', caption = '', hashtags: string[] = []
+    let thumbnailUrl = '', videoUrl = '', likeCount = 0, commentCount = 0, duration = 0, transcript = ''
+
+    setPhase('fetching-free')
+    try {
+      const { metadata, sources: freeSrc } = await fetchInstagramMetadata(targetUrl, workerUrl)
+      freeSources.push(...freeSrc)
+      if (metadata) {
+        title = metadata.title
+        creatorHandle = metadata.creatorHandle
+        caption = metadata.caption
+        hashtags = metadata.hashtags
+        thumbnailUrl = metadata.thumbnailUrl
+        videoUrl = metadata.videoUrl
+        likeCount = metadata.likeCount
+        commentCount = metadata.commentCount
+        duration = metadata.duration
+      }
+    } catch {
+      // silently continue
+    }
+
+    const hasTranscript = caption.length > 20
+    if (!hasTranscript && apifyApiKey) {
+      setPhase('fetching-apify')
+      try {
+        const { result: apifyResult, sources: apifySrc } = await fetchViaApify(apifyApiKey, targetUrl)
+        freeSources.push(...apifySrc)
+        if (apifyResult) {
+          if (!creatorHandle && apifyResult.creatorHandle) creatorHandle = apifyResult.creatorHandle
+          if (!caption && apifyResult.caption) caption = apifyResult.caption
+          if (apifyResult.hashtags.length > 0 && hashtags.length === 0) hashtags = apifyResult.hashtags
+          if (!thumbnailUrl && apifyResult.thumbnailUrl) thumbnailUrl = apifyResult.thumbnailUrl
+          if (!videoUrl && apifyResult.videoUrl) videoUrl = apifyResult.videoUrl
+          if (!likeCount && apifyResult.likeCount) likeCount = apifyResult.likeCount
+          if (!commentCount && apifyResult.commentCount) commentCount = apifyResult.commentCount
+          if (!duration && apifyResult.duration) duration = apifyResult.duration
+          transcript = apifyResult.transcript
+          if (apifyResult.title && !title) title = apifyResult.title
+        }
+      } catch {
+        // silently continue
+      }
+    }
+
+    if (title) {
+      // nothing
+    } else if (caption) {
+      title = caption.split('\n')[0]?.slice(0, 120) || ''
+    } else {
+      title = `Reel by @${creatorHandle || 'unknown'}`
+    }
+
+    const data: FetchedData = {
+      title, creatorHandle, caption, hashtags, thumbnailUrl, videoUrl,
+      likeCount, commentCount, duration, transcript,
+    }
+
+    setFetched(data)
+    setSources(freeSources)
+    setPhase('ready')
+    currentUrlRef.current = ''
+  }, [workerUrl, apifyApiKey])
+
+  const handleUrlChange = (newUrl: string) => {
+    setUrl(newUrl)
+    setPhase('idle')
+    setFetched(null)
+    setSources([])
+    setError('')
+    currentUrlRef.current = ''
+
+    if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current)
+
+    if (isInstagramUrl(newUrl) && newUrl.length > 30) {
+      fetchTimeoutRef.current = setTimeout(() => fetchAll(newUrl), 1000)
+    }
+  }
 
   if (!apiKey) {
     return (
@@ -41,43 +143,62 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey }: Props) {
     )
   }
 
-  const handleProcess = async () => {
-    if (!transcript.trim()) { setError('Please paste the transcript or content'); return }
-    setError('')
-    setStep('processing')
+  const handleAnalyze = async () => {
+    if (!fetched) return
+    setPhase('processing')
     setProgress('Creating Reel entry...')
 
     try {
       const id = await addReel({
-        url: url || 'manual-entry',
-        title: title || 'Untitled Reel',
-        creatorHandle: creator,
-        caption,
-        hashtags: hashtags.split(',').map(t => t.trim()).filter(Boolean),
+        url,
+        title: fetched.title || 'Untitled Reel',
+        creatorHandle: fetched.creatorHandle,
+        caption: fetched.caption,
+        hashtags: fetched.hashtags,
+        thumbnailUrl: fetched.thumbnailUrl,
       })
       if (!id) throw new Error('Failed to create reel')
+
+      const transcriptText = fetched.transcript || fetched.caption || ''
 
       await processReel(
         apiKey,
         {
-          url: url || 'manual-entry',
-          transcript,
-          title,
-          creatorHandle: creator,
-          caption,
-          hashtags: hashtags.split(',').map(t => t.trim()),
+          url,
+          transcript: transcriptText,
+          title: fetched.title,
+          creatorHandle: fetched.creatorHandle,
+          caption: fetched.caption,
+          hashtags: fetched.hashtags,
+          thumbnailUrl: fetched.thumbnailUrl,
         },
         id,
         updateReel,
         setProgress,
       )
 
-      setStep('done')
+      setPhase('done')
       setTimeout(onDone, 1500)
     } catch (e) {
-      setStep('error')
+      setPhase('error')
       setError(e instanceof Error ? e.message : 'Processing failed')
     }
+  }
+
+  const SourceBadge = ({ source, fields }: { source: string; fields: string[] }) => {
+    const isFree = source !== 'apify'
+    return (
+      <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${
+        isFree ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+      }`}>
+        {isFree ? <Globe size={10} /> : <Bot size={10} />}
+        <span className="font-medium">{source}</span>
+        <span className="text-zinc-500">·</span>
+        <span>{fields.length} fields</span>
+        {isFree ? <span className="text-emerald-600">FREE</span> : <span className="text-orange-600">PAID</span>}
+      </div>
+    )
   }
 
   return (
@@ -88,76 +209,134 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey }: Props) {
         </div>
         <div>
           <h2 className="text-2xl font-bold">Add Reel</h2>
-          <p className="text-sm text-zinc-500">Paste the link and transcript — AI handles the rest</p>
+          <p className="text-sm text-zinc-500">Paste the link — AI handles everything</p>
         </div>
       </div>
 
-      {/* How it works */}
+      {/* Steps indicator */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-xs text-zinc-400 space-y-1">
         <p className="font-medium text-zinc-300 mb-1">How it works:</p>
-        <p>1. Copy the Reel link from Instagram</p>
-        <p>2. Get the transcript (copy captions, or describe the content)</p>
-        <p>3. Paste both below → AI generates summary, tags, embeddings, and more</p>
+        <p>1. Paste the Instagram Reel link</p>
+        <p>2. We auto-fetch metadata from free sources first, then Apify if needed</p>
+        <p>3. Click "Analyze" — AI generates summary, tags, embeddings, and more</p>
       </div>
 
-      <div className="space-y-4">
-        {/* URL */}
-        <div>
-          <label className="block text-sm text-zinc-400 mb-1">Reel URL</label>
-          <div className="relative">
-            <Link size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-            <input
-              value={url} onChange={e => setUrl(e.target.value)}
-              placeholder="https://www.instagram.com/reel/..."
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-            />
-          </div>
-        </div>
-
-        {/* Title + Creator */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm text-zinc-400 mb-1">Title</label>
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="What's this Reel about?"
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors" />
-          </div>
-          <div>
-            <label className="block text-sm text-zinc-400 mb-1">Creator</label>
-            <input value={creator} onChange={e => setCreator(e.target.value)} placeholder="@username"
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors" />
-          </div>
-        </div>
-
-        {/* Caption */}
-        <div>
-          <label className="block text-sm text-zinc-400 mb-1">Caption</label>
-          <input value={caption} onChange={e => setCaption(e.target.value)} placeholder="Original caption from the Reel"
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors" />
-        </div>
-
-        {/* Hashtags */}
-        <div>
-          <label className="block text-sm text-zinc-400 mb-1">Hashtags</label>
-          <input value={hashtags} onChange={e => setHashtags(e.target.value)} placeholder="#productivity, #ai, #tips"
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors" />
-        </div>
-
-        {/* Transcript */}
-        <div>
-          <label className="block text-sm text-zinc-400 mb-1">
-            Transcript / Content <span className="text-red-400">*</span>
-          </label>
-          <textarea
-            value={transcript} onChange={e => setTranscript(e.target.value)}
-            placeholder={"Paste the Reel's transcript here. You can:\n• Copy the captions/text from the Reel\n• Describe what the Reel is about\n• Paste any notes you took while watching\n\nThe more detail, the better the AI analysis."}
-            rows={10}
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+      {/* URL Input */}
+      <div>
+        <label className="block text-sm text-zinc-400 mb-1">Instagram Reel URL</label>
+        <div className="relative">
+          <Link size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <input
+            value={url}
+            onChange={e => handleUrlChange(e.target.value)}
+            placeholder="https://www.instagram.com/reel/..."
+            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
           />
-          <p className="text-xs text-zinc-600 mt-1">
-            {transcript.length > 0 ? `${transcript.length} characters` : 'Required — AI cannot watch videos, it needs text'}
-          </p>
         </div>
       </div>
+
+      {/* Fetching status */}
+      {phase === 'fetching-free' && (
+        <div className="flex items-center gap-2 text-sm text-cyan-400 bg-cyan-500/5 border border-cyan-500/20 rounded-lg p-3">
+          <Loader2 size={14} className="animate-spin" />
+          <span>Fetching from free sources (GraphQL + oEmbed)...</span>
+        </div>
+      )}
+
+      {phase === 'fetching-apify' && (
+        <div className="flex items-center gap-2 text-sm text-orange-400 bg-orange-500/5 border border-orange-500/20 rounded-lg p-3">
+          <Loader2 size={14} className="animate-spin" />
+          <span>Fetching transcript from Apify...</span>
+        </div>
+      )}
+
+      {/* Fetched results */}
+      {phase === 'ready' && fetched && (
+        <div className="space-y-3">
+          {/* Source badges */}
+          {sources.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {sources.map((s, i) => (
+                <SourceBadge key={i} source={s.source} fields={s.fields} />
+              ))}
+            </div>
+          )}
+
+          {sources.length === 0 && (
+            <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/5 border border-amber-500/20 rounded-lg p-3">
+              <AlertCircle size={12} />
+              <span>No metadata could be fetched. Add a Cloudflare Worker or Apify key in Settings for better results.</span>
+            </div>
+          )}
+
+          {/* Fetched data preview */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+            <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Fetched Data</h3>
+
+            {fetched.thumbnailUrl && (
+              <img src={fetched.thumbnailUrl} alt="" className="w-24 h-24 rounded-lg object-cover" />
+            )}
+
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {fetched.title && (
+                <div className="col-span-2">
+                  <p className="text-xs text-zinc-500">Title</p>
+                  <p className="text-zinc-200">{fetched.title}</p>
+                </div>
+              )}
+              {fetched.creatorHandle && (
+                <div>
+                  <p className="text-xs text-zinc-500">Creator</p>
+                  <p className="text-zinc-200">@{fetched.creatorHandle}</p>
+                </div>
+              )}
+              {fetched.likeCount > 0 && (
+                <div>
+                  <p className="text-xs text-zinc-500">Likes</p>
+                  <p className="text-zinc-200">{fetched.likeCount.toLocaleString()}</p>
+                </div>
+              )}
+              {fetched.duration > 0 && (
+                <div>
+                  <p className="text-xs text-zinc-500">Duration</p>
+                  <p className="text-zinc-200">{Math.round(fetched.duration)}s</p>
+                </div>
+              )}
+              {fetched.commentCount > 0 && (
+                <div>
+                  <p className="text-xs text-zinc-500">Comments</p>
+                  <p className="text-zinc-200">{fetched.commentCount.toLocaleString()}</p>
+                </div>
+              )}
+            </div>
+
+            {fetched.hashtags.length > 0 && (
+              <div>
+                <p className="text-xs text-zinc-500 mb-1">Hashtags</p>
+                <div className="flex flex-wrap gap-1">
+                  {fetched.hashtags.map(h => (
+                    <span key={h} className="px-2 py-0.5 bg-indigo-500/10 text-indigo-400 rounded text-xs">#{h}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {fetched.caption && (
+              <div>
+                <p className="text-xs text-zinc-500 mb-1">Caption</p>
+                <p className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap">{fetched.caption}</p>
+              </div>
+            )}
+
+            {fetched.transcript && (
+              <div>
+                <p className="text-xs text-zinc-500 mb-1">Transcript</p>
+                <p className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap max-h-32 overflow-auto">{fetched.transcript}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 rounded-lg p-3">
@@ -166,14 +345,14 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey }: Props) {
       )}
 
       <button
-        onClick={handleProcess}
-        disabled={step === 'processing' || !transcript.trim()}
+        onClick={handleAnalyze}
+        disabled={!fetched || phase === 'processing' || phase === 'done'}
         className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
       >
-        {step === 'processing' && <><Loader2 size={16} className="animate-spin" /> {progress}</>}
-        {step === 'done' && <><CheckCircle2 size={16} /> Done!</>}
-        {step === 'form' && <><Sparkles size={16} /> Analyze with AI</>}
-        {step === 'error' && 'Retry'}
+        {phase === 'processing' && <><Loader2 size={16} className="animate-spin" /> {progress}</>}
+        {phase === 'done' && <><CheckCircle2 size={16} /> Done!</>}
+        {phase === 'ready' && <><Sparkles size={16} /> Analyze with AI</>}
+        {(phase === 'idle' || phase === 'fetching-free' || phase === 'fetching-apify') && <><Sparkles size={16} /> Paste a URL to start</>}
       </button>
     </div>
   )

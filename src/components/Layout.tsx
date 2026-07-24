@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Brain, LogOut, Plus, FolderOpen, MessageSquare, Settings as SettingsIcon } from 'lucide-react'
+import { Brain, LogOut, Plus, FolderOpen, MessageSquare, Settings as SettingsIcon, Network, Activity } from 'lucide-react'
 
 interface Props {
   children: ReactNode
@@ -12,8 +12,9 @@ interface Props {
 const tabs = [
   { id: 'library', label: 'Library', icon: FolderOpen },
   { id: 'chat', label: 'Chat', icon: MessageSquare },
-  { id: 'graph', label: 'Knowledge Graph', icon: Brain },
-  { id: 'collections', label: 'Collections', icon: FolderOpen },
+  { id: 'graph', label: 'Knowledge Graph', icon: Network },
+  { id: 'collections', label: 'Collections', icon: Brain },
+  { id: 'datasources', label: 'Data Sources', icon: Activity },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ]
 

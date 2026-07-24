@@ -11,12 +11,13 @@ import { NeuralGraph } from './components/NeuralGraph'
 import { Chat } from './components/Chat'
 import { Collections } from './components/Collections'
 import { Settings } from './components/Settings'
+import { DataSources } from './components/DataSources'
 
 function Dashboard() {
   const { user, logout } = useAuth()
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel } = useReels(user?.uid)
   const { collections, addCollection, deleteCollection } = useCollections(user?.uid)
-  const { apiKey } = useApiKey()
+  const { apiKey, workerUrl, apifyApiKey } = useApiKey()
   const [tab, setTab] = useState('library')
 
   if (!user) return null
@@ -32,12 +33,23 @@ function Dashboard() {
         <Library reels={reels} onDelete={deleteReel} collections={collections} apiKey={apiKey} />
       )}
       {tab === 'ingest' && (
-        <IngestionForm userId={user.uid} addReel={addReel} updateReel={updateReel} onDone={() => setTab('library')} apiKey={apiKey} />
+        <IngestionForm
+          userId={user.uid}
+          addReel={addReel}
+          updateReel={updateReel}
+          onDone={() => setTab('library')}
+          apiKey={apiKey}
+          workerUrl={workerUrl}
+          apifyApiKey={apifyApiKey}
+        />
       )}
       {tab === 'chat' && <Chat reels={reels} apiKey={apiKey} />}
       {tab === 'graph' && <NeuralGraph reels={reels} />}
       {tab === 'collections' && (
         <Collections collections={collections} reels={reels} onAdd={addCollection} onDelete={deleteCollection} />
+      )}
+      {tab === 'datasources' && (
+        <DataSources workerUrl={workerUrl} apifyApiKey={apifyApiKey} groqApiKey={apiKey} />
       )}
       {tab === 'settings' && <Settings userId={user.uid} />}
     </Layout>

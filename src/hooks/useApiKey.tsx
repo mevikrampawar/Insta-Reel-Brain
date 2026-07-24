@@ -4,13 +4,17 @@ import { doc, onSnapshot } from 'firebase/firestore'
 
 interface ApiKeyContextType {
   apiKey: string
+  workerUrl: string
+  apifyApiKey: string
   loading: boolean
 }
 
-const ApiKeyContext = createContext<ApiKeyContextType>({ apiKey: '', loading: true })
+const ApiKeyContext = createContext<ApiKeyContextType>({ apiKey: '', workerUrl: '', apifyApiKey: '', loading: true })
 
 export function ApiKeyProvider({ userId, children }: { userId: string; children: ReactNode }) {
   const [apiKey, setApiKey] = useState('')
+  const [workerUrl, setWorkerUrl] = useState('')
+  const [apifyApiKey, setApifyApiKey] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -18,7 +22,16 @@ export function ApiKeyProvider({ userId, children }: { userId: string; children:
     const unsub = onSnapshot(
       doc(db, 'users', userId, 'settings', 'preferences'),
       snap => {
-        setApiKey(snap.exists() ? (snap.data().groqApiKey || '') : '')
+        if (snap.exists()) {
+          const d = snap.data()
+          setApiKey(d.groqApiKey || '')
+          setWorkerUrl(d.workerUrl || '')
+          setApifyApiKey(d.apifyApiKey || '')
+        } else {
+          setApiKey('')
+          setWorkerUrl('')
+          setApifyApiKey('')
+        }
         setLoading(false)
       },
       () => setLoading(false),
@@ -27,7 +40,7 @@ export function ApiKeyProvider({ userId, children }: { userId: string; children:
   }, [userId])
 
   return (
-    <ApiKeyContext.Provider value={{ apiKey, loading }}>
+    <ApiKeyContext.Provider value={{ apiKey, workerUrl, apifyApiKey, loading }}>
       {children}
     </ApiKeyContext.Provider>
   )
