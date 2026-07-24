@@ -1,17 +1,16 @@
-import { GROQ_API_KEY } from '../firebase-config'
-
 const BASE = 'https://api.groq.com/openai/v1'
 
 async function callGroq(
+  apiKey: string,
   messages: { role: string; content: string }[],
   opts?: { temperature?: number; max_tokens?: number; model?: string },
 ): Promise<string> {
-  if (!GROQ_API_KEY) throw new Error('Groq API key not configured. Add VITE_GROQ_API_KEY to .env')
+  if (!apiKey) throw new Error('No API key configured. Go to Settings to add your Groq API key.')
   const res = await fetch(`${BASE}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${GROQ_API_KEY}`,
+      'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       model: opts?.model || 'llama-3.3-70b-versatile',
@@ -29,6 +28,7 @@ async function callGroq(
 }
 
 export async function analyzeReel(
+  apiKey: string,
   transcript: string,
   metadata: { creator?: string; caption?: string; hashtags?: string[]; title?: string },
 ): Promise<{
@@ -39,7 +39,7 @@ export async function analyzeReel(
   language: string
   actionItems: string[]
 }> {
-  const raw = await callGroq([
+  const raw = await callGroq(apiKey, [
     {
       role: 'system',
       content: `You are an expert content analyst for Instagram Reels. Analyze transcripts and extract structured data. Always respond with valid JSON only, no markdown.`,
@@ -85,8 +85,8 @@ Respond with ONLY this JSON:
   }
 }
 
-export async function generateEmbedding(text: string): Promise<number[]> {
-  const raw = await callGroq([
+export async function generateEmbedding(apiKey: string, text: string): Promise<number[]> {
+  const raw = await callGroq(apiKey, [
     {
       role: 'system',
       content: 'Generate semantic embedding vectors. Respond with ONLY 64 comma-separated decimal numbers between -1 and 1. Nothing else.',
@@ -103,11 +103,8 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   return norm > 0 ? vector.map(v => v / norm) : vector
 }
 
-export async function searchQueryToEmbedding(query: string): Promise<number[]> {
-  return generateEmbedding(query)
-}
-
 export async function chatWithLibrary(
+  apiKey: string,
   question: string,
   context: { title: string; summary: string; transcript: string; tags: string[] }[],
 ): Promise<string> {
@@ -115,7 +112,7 @@ export async function chatWithLibrary(
     `REEL ${i + 1}: "${r.title}"\nTags: ${r.tags.join(', ')}\nSummary: ${r.summary}\nTranscript excerpt: ${r.transcript.slice(0, 800)}`
   ).join('\n\n---\n\n')
 
-  return callGroq([
+  return callGroq(apiKey, [
     {
       role: 'system',
       content: `You are a helpful assistant that answers questions based on a user's saved Instagram Reel library. Use ONLY the provided Reels as your knowledge base. Always cite which Reel(s) you're referencing by number. If the library doesn't contain relevant information, say so clearly.`,
@@ -128,6 +125,7 @@ export async function chatWithLibrary(
 }
 
 export async function extractMetadataFromText(
+  apiKey: string,
   url: string,
   pageText: string,
 ): Promise<{
@@ -137,7 +135,7 @@ export async function extractMetadataFromText(
   hashtags: string[]
   description: string
 }> {
-  const raw = await callGroq([
+  const raw = await callGroq(apiKey, [
     {
       role: 'system',
       content: 'Extract Instagram Reel metadata from page text. Respond with valid JSON only.',
@@ -166,4 +164,8 @@ Respond with ONLY this JSON:
     if (match) return JSON.parse(match[0])
     return { title: '', creator: '', caption: '', hashtags: [], description: '' }
   }
+}
+
+export async function searchQueryToEmbedding(apiKey: string, query: string): Promise<number[]> {
+  return generateEmbedding(apiKey, query)
 }

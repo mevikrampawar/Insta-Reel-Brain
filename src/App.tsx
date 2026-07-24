@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAuth } from './hooks/useAuth'
 import { useReels } from './hooks/useReels'
 import { useCollections } from './hooks/useCollections'
-
+import { ApiKeyProvider, useApiKey } from './hooks/useApiKey'
 import { Login } from './components/Login'
 import { Layout } from './components/Layout'
 import { Library } from './components/Library'
@@ -10,20 +10,16 @@ import { IngestionForm } from './components/IngestionForm'
 import { NeuralGraph } from './components/NeuralGraph'
 import { Chat } from './components/Chat'
 import { Collections } from './components/Collections'
+import { Settings } from './components/Settings'
 
-export default function App() {
-  const { user, loading: authLoading, signInWithGoogle, logout } = useAuth()
+function Dashboard() {
+  const { user, logout } = useAuth()
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel } = useReels(user?.uid)
   const { collections, addCollection, deleteCollection } = useCollections(user?.uid)
+  const { apiKey } = useApiKey()
   const [tab, setTab] = useState('library')
 
-  if (authLoading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  )
-
-  if (!user) return <Login onLogin={signInWithGoogle} />
+  if (!user) return null
 
   return (
     <Layout activeTab={tab} onTabChange={setTab} onLogout={logout} userPhoto={user.photoURL || undefined}>
@@ -33,16 +29,35 @@ export default function App() {
         </div>
       )}
       {!reelsLoading && tab === 'library' && (
-        <Library reels={reels} onDelete={deleteReel} collections={collections} />
+        <Library reels={reels} onDelete={deleteReel} collections={collections} apiKey={apiKey} />
       )}
       {tab === 'ingest' && (
-        <IngestionForm userId={user.uid} addReel={addReel} updateReel={updateReel} onDone={() => setTab('library')} />
+        <IngestionForm userId={user.uid} addReel={addReel} updateReel={updateReel} onDone={() => setTab('library')} apiKey={apiKey} />
       )}
-      {tab === 'chat' && <Chat reels={reels} />}
+      {tab === 'chat' && <Chat reels={reels} apiKey={apiKey} />}
       {tab === 'graph' && <NeuralGraph reels={reels} />}
       {tab === 'collections' && (
         <Collections collections={collections} reels={reels} onAdd={addCollection} onDelete={deleteCollection} />
       )}
+      {tab === 'settings' && <Settings userId={user.uid} />}
     </Layout>
+  )
+}
+
+export default function App() {
+  const { user, loading, signInWithGoogle } = useAuth()
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+
+  if (!user) return <Login onLogin={signInWithGoogle} />
+
+  return (
+    <ApiKeyProvider userId={user.uid}>
+      <Dashboard />
+    </ApiKeyProvider>
   )
 }

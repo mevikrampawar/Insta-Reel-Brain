@@ -9,9 +9,10 @@ interface Props {
   reels: Reel[]
   onDelete: (id: string) => void
   collections: Collection[]
+  apiKey: string
 }
 
-export function Library({ reels, onDelete, collections }: Props) {
+export function Library({ reels, onDelete, collections, apiKey }: Props) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [filter, setFilter] = useState<'all' | 'complete' | 'processing' | 'failed'>('all')
   const [collectionFilter, setCollectionFilter] = useState<string>('all')
@@ -83,7 +84,7 @@ export function Library({ reels, onDelete, collections }: Props) {
       )}
 
       {/* Search */}
-      <SearchBar reels={reels} onResults={setSearchResults} />
+      <SearchBar reels={reels} onResults={setSearchResults} apiKey={apiKey} />
 
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">

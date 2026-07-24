@@ -19,7 +19,7 @@ async function fetchWithProxy(url: string): Promise<string> {
   throw new Error('Could not fetch URL. Try pasting the transcript manually.')
 }
 
-export async function scrapeInstagramUrl(url: string): Promise<{
+export async function scrapeInstagramUrl(apiKey: string, url: string): Promise<{
   title: string
   creator: string
   caption: string
@@ -28,7 +28,6 @@ export async function scrapeInstagramUrl(url: string): Promise<{
 }> {
   const html = await fetchWithProxy(url)
 
-  // Try og:title and meta tags first
   const getMeta = (name: string) => {
     const match = html.match(new RegExp(`<meta[^>]*(?:property|name)=["']${name}["'][^>]*content=["']([^"']+)["']`, 'i'))
     return match?.[1] || ''
@@ -39,16 +38,12 @@ export async function scrapeInstagramUrl(url: string): Promise<{
   const ogImage = getMeta('og:image')
   const ogVideo = getMeta('og:video')
 
-  // Extract from page text using AI
   const bodyText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 5000)
-  const extracted = await extractMetadataFromText(url, bodyText)
+  const extracted = await extractMetadataFromText(apiKey, url, bodyText)
 
-  // Parse hashtags from caption
   const captionText = extracted.caption || ogDesc || ''
   const hashtagMatches = captionText.match(/#[\w]+/g) || []
   const hashtags = [...new Set([...extracted.hashtags, ...hashtagMatches.map(h => h.slice(1))])]
-
-  // Extract creator from URL pattern
   const creatorFromUrl = url.match(/instagram\.com\/([^/]+)/)?.[1] || ''
 
   return {
@@ -61,6 +56,7 @@ export async function scrapeInstagramUrl(url: string): Promise<{
 }
 
 export async function processReel(
+  apiKey: string,
   input: {
     url: string
     transcript: string
@@ -76,7 +72,7 @@ export async function processReel(
 ): Promise<void> {
   try {
     onProgress?.('Analyzing content with AI...')
-    const analysis = await analyzeReel(input.transcript, {
+    const analysis = await analyzeReel(apiKey, input.transcript, {
       creator: input.creatorHandle,
       caption: input.caption,
       hashtags: input.hashtags,
@@ -85,7 +81,7 @@ export async function processReel(
 
     onProgress?.('Generating search embeddings...')
     const embText = [analysis.summary, ...analysis.keyTakeaways, ...analysis.suggestedTags, input.transcript].join(' ')
-    const embedding = await generateEmbedding(embText)
+    const embedding = await generateEmbedding(apiKey, embText)
 
     await updateFn(reelId, {
       ingestStatus: 'complete',

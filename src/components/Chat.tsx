@@ -1,17 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, BookOpen } from 'lucide-react'
+import { Send, Loader2, BookOpen, AlertCircle } from 'lucide-react'
 import type { Reel } from '../types'
 import { chatWithLibrary } from '../services/gemini'
-import { GROQ_API_KEY } from '../firebase-config'
 
-interface Props { reels: Reel[] }
+interface Props { reels: Reel[]; apiKey: string }
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
 }
 
-export function Chat({ reels }: Props) {
+export function Chat({ reels, apiKey }: Props) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -22,7 +21,11 @@ export function Chat({ reels }: Props) {
   const completeReels = reels.filter(r => r.ingestStatus === 'complete')
 
   const handleSend = async () => {
-    if (!input.trim() || loading || !GROQ_API_KEY) return
+    if (!input.trim() || loading) return
+    if (!apiKey) {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Please add your Groq API key in Settings to use chat.' }])
+      return
+    }
     const q = input.trim()
     setInput('')
     setMessages(prev => [...prev, { role: 'user', content: q }])
@@ -35,8 +38,7 @@ export function Chat({ reels }: Props) {
         transcript: r.transcript || '',
         tags: r.suggestedTags || [],
       }))
-
-      const answer = await chatWithLibrary(q, context)
+      const answer = await chatWithLibrary(apiKey, q, context)
       setMessages(prev => [...prev, { role: 'assistant', content: answer }])
     } catch (e) {
       setMessages(prev => [...prev, {
@@ -47,17 +49,8 @@ export function Chat({ reels }: Props) {
     setLoading(false)
   }
 
-  if (!GROQ_API_KEY) {
-    return (
-      <div className="p-8 text-center text-zinc-500">
-        <p>Configure Groq API key to use chat.</p>
-      </div>
-    )
-  }
-
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="p-4 border-b border-zinc-800">
         <div className="flex items-center gap-2">
           <BookOpen size={18} className="text-indigo-400" />
@@ -66,9 +59,14 @@ export function Chat({ reels }: Props) {
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-auto p-4 space-y-4">
-        {messages.length === 0 && (
+        {!apiKey && (
+          <div className="text-center py-8 space-y-2">
+            <AlertCircle size={24} className="mx-auto text-amber-400" />
+            <p className="text-sm text-zinc-400">Add your Groq API key in Settings to use chat</p>
+          </div>
+        )}
+        {messages.length === 0 && apiKey && (
           <div className="text-center py-12 space-y-3">
             <BookOpen size={32} className="mx-auto text-zinc-600" />
             <p className="text-zinc-400 text-sm">Ask anything about your saved Reels</p>
@@ -104,16 +102,16 @@ export function Chat({ reels }: Props) {
         <div ref={endRef} />
       </div>
 
-      {/* Input */}
       <div className="p-4 border-t border-zinc-800">
         <div className="flex gap-2">
           <input
             value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            placeholder="Ask about your Reels..."
-            className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+            placeholder={apiKey ? "Ask about your Reels..." : "Add API key in Settings first..."}
+            disabled={!apiKey}
+            className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors disabled:opacity-50"
           />
-          <button onClick={handleSend} disabled={loading || !input.trim()}
+          <button onClick={handleSend} disabled={loading || !input.trim() || !apiKey}
             className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg transition-colors">
             <Send size={16} />
           </button>
