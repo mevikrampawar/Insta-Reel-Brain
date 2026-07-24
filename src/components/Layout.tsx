@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Brain, LogOut, Plus, FolderOpen } from 'lucide-react'
+import { Brain, LogOut, Plus, FolderOpen, MessageSquare } from 'lucide-react'
 
 interface Props {
   children: ReactNode
@@ -11,14 +11,16 @@ interface Props {
 
 const tabs = [
   { id: 'library', label: 'Library', icon: FolderOpen },
+  { id: 'chat', label: 'Chat', icon: MessageSquare },
   { id: 'graph', label: 'Knowledge Graph', icon: Brain },
+  { id: 'collections', label: 'Collections', icon: FolderOpen },
 ]
 
 export function Layout({ children, activeTab, onTabChange, onLogout, userPhoto }: Props) {
   return (
     <div className="min-h-screen flex">
       {/* Sidebar */}
-      <aside className="w-60 border-r border-zinc-800 flex flex-col shrink-0">
+      <aside className="w-56 border-r border-zinc-800 flex flex-col shrink-0">
         <div className="p-4 border-b border-zinc-800">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">

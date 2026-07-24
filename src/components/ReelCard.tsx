@@ -1,14 +1,21 @@
 import { useState } from 'react'
-import { ExternalLink, Tag, Clock, Trash2, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
-import type { Reel } from '../types'
+import { ExternalLink, Tag, Clock, Trash2, ChevronDown, ChevronUp, AlertCircle, FolderPlus, StickyNote } from 'lucide-react'
+import type { Reel, Collection } from '../types'
+import { useNotes } from '../hooks/useNotes'
+import { Notes } from './Notes'
 
 interface Props {
   reel: Reel
   onDelete: (id: string) => void
+  collections?: Collection[]
+  onAddToCollection?: (reelId: string, collectionId: string) => void
 }
 
-export function ReelCard({ reel, onDelete }: Props) {
+export function ReelCard({ reel, onDelete, collections, onAddToCollection }: Props) {
   const [expanded, setExpanded] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
+  const [showCollections, setShowCollections] = useState(false)
+  const { notes, addNote, deleteNote } = useNotes(undefined, reel.id)
 
   if (reel.ingestStatus === 'failed') {
     return (
@@ -55,9 +62,23 @@ export function ReelCard({ reel, onDelete }: Props) {
             {reel.creatorHandle && <p className="text-xs text-zinc-500 mb-2">@{reel.creatorHandle}</p>}
             <p className="text-sm text-zinc-300 line-clamp-2">{reel.summary}</p>
           </div>
-          <button onClick={() => onDelete(reel.id)} className="text-zinc-600 hover:text-red-400 shrink-0 transition-colors">
-            <Trash2 size={14} />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button onClick={() => setShowNotes(!showNotes)}
+              className={`p-1.5 rounded-lg transition-colors ${showNotes ? 'bg-amber-500/10 text-amber-400' : 'text-zinc-600 hover:text-amber-400'}`}
+              title="Notes">
+              <StickyNote size={14} />
+            </button>
+            {collections && collections.length > 0 && (
+              <button onClick={() => setShowCollections(!showCollections)}
+                className={`p-1.5 rounded-lg transition-colors ${showCollections ? 'bg-indigo-500/10 text-indigo-400' : 'text-zinc-600 hover:text-indigo-400'}`}
+                title="Add to collection">
+                <FolderPlus size={14} />
+              </button>
+            )}
+            <button onClick={() => onDelete(reel.id)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors">
+              <Trash2 size={14} />
+            </button>
+          </div>
         </div>
 
         {/* Tags */}
@@ -90,9 +111,40 @@ export function ReelCard({ reel, onDelete }: Props) {
         </button>
       </div>
 
+      {/* Add to collection dropdown */}
+      {showCollections && collections && (
+        <div className="border-t border-zinc-800 p-3">
+          <p className="text-xs text-zinc-500 mb-2">Add to collection:</p>
+          <div className="flex flex-wrap gap-2">
+            {collections.map(c => {
+              const inCollection = c.reelIds?.includes(reel.id)
+              return (
+                <button key={c.id} onClick={() => !inCollection && onAddToCollection?.(reel.id, c.id)}
+                  disabled={inCollection}
+                  className={`px-2 py-1 rounded text-xs transition-colors ${
+                    inCollection
+                      ? 'bg-zinc-700 text-zinc-400 cursor-default'
+                      : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                  }`}>
+                  <span className="w-2 h-2 rounded-full inline-block mr-1" style={{ background: c.color }} />
+                  {c.name} {inCollection && '✓'}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Notes */}
+      {showNotes && (
+        <div className="border-t border-zinc-800 p-3">
+          <Notes notes={notes} reelTitle={reel.title} onAdd={addNote} onDelete={deleteNote} />
+        </div>
+      )}
+
+      {/* Expanded content */}
       {expanded && (
         <div className="border-t border-zinc-800 p-4 space-y-3 text-sm">
-          {/* Takeaways */}
           {reel.keyTakeaways.length > 0 && (
             <div>
               <p className="text-xs font-medium text-zinc-400 mb-1">Key Takeaways</p>
@@ -105,15 +157,12 @@ export function ReelCard({ reel, onDelete }: Props) {
               </ul>
             </div>
           )}
-
-          {/* Transcript */}
           {reel.transcript && (
             <div>
               <p className="text-xs font-medium text-zinc-400 mb-1">Transcript</p>
-              <p className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap">{reel.transcript}</p>
+              <p className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap max-h-48 overflow-auto">{reel.transcript}</p>
             </div>
           )}
-
           <div className="flex items-center gap-1 text-xs text-zinc-500">
             <Clock size={12} />
             {new Date(reel.createdAt).toLocaleDateString()}

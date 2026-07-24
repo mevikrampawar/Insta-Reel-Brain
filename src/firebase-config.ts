@@ -1,4 +1,4 @@
-// Firebase client-side config — PUBLIC by design, safe to commit
+// Firebase config — safe to commit
 export const firebaseConfig = {
   apiKey: "AIzaSyBTIJMCFt7_RVeCo0SSWprCnaP0NdDaoIA",
   authDomain: "insta-reel-brain.firebaseapp.com",
@@ -9,6 +9,6 @@ export const firebaseConfig = {
   measurementId: "G-72TM6842NB",
 }
 
-// Gemini API key — injected at build time via GitHub Actions secrets
-// For local dev, set GEMINI_API_KEY in a .env file (already gitignored)
-export const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ""
+// Groq API key — free tier (30 RPM, no billing required)
+// Get from: https://console.groq.com
+export const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || ""
