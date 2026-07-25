@@ -1,7 +1,6 @@
 import type { DataSourceRecord } from '../types'
 import { withRetry } from '../utils/retry'
 
-const CORS_PROXY = 'https://corsproxy.io/?url='
 const APIFY_BASE = 'https://api.apify.com/v2'
 const ACTOR_ID = 'apify/instagram-reel-scraper'
 
@@ -28,11 +27,9 @@ async function apifyFetch(
   method: string = 'GET',
   payload?: object,
 ): Promise<unknown> {
-  const sep = endpoint.includes('?') ? '&' : '?'
-  const targetUrl = `${APIFY_BASE}/${endpoint}${sep}token=${token}`
-  const proxyUrl = `${CORS_PROXY}${encodeURIComponent(targetUrl)}`
-  const res = await fetch(proxyUrl, {
+  const res = await fetch(`${APIFY_BASE}/${endpoint}`, {
     method,
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     ...(payload ? { body: JSON.stringify(payload) } : {}),
   })
   if (!res.ok) {
