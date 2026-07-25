@@ -1,3 +1,10 @@
+export interface DataSourceRecord {
+  source: 'graphql' | 'apify' | 'groq'
+  fields: string[]
+  cost: 'free' | 'paid'
+  timestamp: number
+}
+
 export interface Reel {
   id: string
   userId: string
@@ -20,6 +27,7 @@ export interface Reel {
   suggestedTags: string[]
   embedding: number[]
   concepts: { conceptName: string; conceptType: string; weight: number }[]
+  dataSources: DataSourceRecord[]
   createdAt: number
   updatedAt: number
   ingestedAt: number

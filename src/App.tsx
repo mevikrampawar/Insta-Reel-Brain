@@ -49,7 +49,7 @@ function Dashboard() {
         <Collections collections={collections} reels={reels} onAdd={addCollection} onDelete={deleteCollection} />
       )}
       {tab === 'datasources' && (
-        <DataSources workerUrl={workerUrl} apifyApiKey={apifyApiKey} groqApiKey={apiKey} />
+        <DataSources reels={reels} workerUrl={workerUrl} apifyApiKey={apifyApiKey} groqApiKey={apiKey} />
       )}
       {tab === 'settings' && <Settings userId={user.uid} />}
     </Layout>

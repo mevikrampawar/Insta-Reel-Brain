@@ -1,246 +1,216 @@
-import { useState } from 'react'
-import { Globe, Bot, CheckCircle2, XCircle, Loader2, ArrowRight, Zap, AlertCircle } from 'lucide-react'
-import { fetchInstagramMetadata, validateWorkerUrl } from '../services/instagram'
-import { fetchViaApify } from '../services/apify'
+import { useMemo } from 'react'
+import { Globe, Bot, Zap, ExternalLink, TrendingUp } from 'lucide-react'
+import type { Reel } from '../types'
 
 interface Props {
+  reels: Reel[]
   workerUrl: string
   apifyApiKey: string
   groqApiKey: string
 }
 
-interface SourceStatus {
-  name: string
-  icon: typeof Globe
-  configured: boolean
-  testing: boolean
-  tested: boolean
-  working: boolean
-  fields: string[]
-  cost: string
-  color: string
+const SOURCE_CONFIG = {
+  graphql: { icon: Globe, label: 'GraphQL Worker', color: 'cyan', cost: 'FREE' },
+  apify: { icon: Bot, label: 'Apify', color: 'orange', cost: 'PAID' },
+  groq: { icon: Zap, label: 'Groq AI', color: 'indigo', cost: 'FREE' },
 }
 
-export function DataSources({ workerUrl, apifyApiKey, groqApiKey }: Props) {
-  const [sources, setSources] = useState<SourceStatus[]>([
-    {
-      name: 'GraphQL (Cloudflare Worker)',
-      icon: Globe,
-      configured: !!workerUrl,
-      testing: false,
-      tested: false,
-      working: false,
-      fields: ['creator', 'caption', 'hashtags', 'thumbnail', 'video_url', 'likes', 'comments', 'duration'],
-      cost: 'FREE',
-      color: 'cyan',
-    },
-    {
-      name: 'Apify Instagram Scraper',
-      icon: Bot,
-      configured: !!apifyApiKey,
-      testing: false,
-      tested: false,
-      working: false,
-      fields: ['creator', 'caption', 'hashtags', 'thumbnail', 'likes', 'comments', 'duration', 'transcript'],
-      cost: 'PAID ($5 free credit)',
-      color: 'orange',
-    },
-    {
-      name: 'Groq AI Analysis',
-      icon: Zap,
-      configured: !!groqApiKey,
-      testing: false,
-      tested: false,
-      working: false,
-      fields: ['summary', 'key_takeaways', 'tags', 'concepts', 'action_items', 'embeddings'],
-      cost: 'FREE (30 RPM)',
-      color: 'indigo',
-    },
-  ])
+export function DataSources({ reels, workerUrl, apifyApiKey, groqApiKey }: Props) {
+  const completeReels = useMemo(() => reels.filter(r => r.ingestStatus === 'complete'), [reels])
 
-  const [testResults, setTestResults] = useState<string[]>([])
-
-  const handleTestAll = async () => {
-    setTestResults([])
-    const testUrl = 'https://www.instagram.com/reel/DLbXjKNTu4b/'
-    const newSources = [...sources]
-    const results: string[] = []
-
-    // Test GraphQL Worker
-    if (workerUrl) {
-      const idx = newSources.findIndex(s => s.name.includes('GraphQL'))
-      newSources[idx] = { ...newSources[idx], testing: true }
-      setSources([...newSources])
-
-      const validation = validateWorkerUrl(workerUrl)
-      if (!validation.valid) {
-        newSources[idx] = { ...newSources[idx], testing: false, tested: true, working: false }
-        results.push(`GraphQL: ${validation.error}`)
-      } else {
-        try {
-          const { metadata, sources: src } = await fetchInstagramMetadata(testUrl, workerUrl)
-          const worked = !!metadata?.creatorHandle
-          newSources[idx] = { ...newSources[idx], testing: false, tested: true, working: worked }
-          if (worked) results.push(`GraphQL: ✓ Working (${src[0]?.fields.length || 0} fields)`)
-          else results.push('GraphQL: ✗ No data returned (worker may not be deployed correctly)')
-        } catch (e) {
-          newSources[idx] = { ...newSources[idx], testing: false, tested: true, working: false }
-          results.push(`GraphQL: ✗ ${e instanceof Error ? e.message : 'Failed'}`)
-        }
-      }
-      setSources([...newSources])
+  const stats = useMemo(() => {
+    const allSources = completeReels.flatMap(r => r.dataSources || [])
+    const bySource = {
+      graphql: allSources.filter(s => s.source === 'graphql'),
+      apify: allSources.filter(s => s.source === 'apify'),
+      groq: allSources.filter(s => s.source === 'groq'),
     }
+    const freeFields = allSources.filter(s => s.cost === 'free').reduce((n, s) => n + s.fields.length, 0)
+    const paidFields = allSources.filter(s => s.cost === 'paid').reduce((n, s) => n + s.fields.length, 0)
+    const totalFields = freeFields + paidFields
 
-    // Test Apify
-    if (apifyApiKey) {
-      const idx = newSources.findIndex(s => s.name.includes('Apify'))
-      newSources[idx] = { ...newSources[idx], testing: true }
-      setSources([...newSources])
-
-      try {
-        const { result, sources: src } = await fetchViaApify(apifyApiKey, testUrl)
-        const worked = !!result?.creatorHandle
-        newSources[idx] = { ...newSources[idx], testing: false, tested: true, working: worked }
-        if (worked) results.push(`Apify: ✓ Working (${src[0]?.fields.length || 0} fields)`)
-        else results.push('Apify: ✗ No data returned')
-      } catch (e) {
-        newSources[idx] = { ...newSources[idx], testing: false, tested: true, working: false }
-        results.push(`Apify: ✗ ${e instanceof Error ? e.message : 'Failed'}`)
-      }
-      setSources([...newSources])
+    return {
+      totalReels: completeReels.length,
+      bySource,
+      freeFields,
+      paidFields,
+      totalFields,
+      freePercent: totalFields > 0 ? Math.round((freeFields / totalFields) * 100) : 0,
     }
-
-    // Groq
-    const groqIdx = newSources.findIndex(s => s.name.includes('Groq'))
-    newSources[groqIdx] = { ...newSources[groqIdx], tested: true, working: !!groqApiKey }
-    if (groqApiKey) results.push('Groq: ✓ Configured')
-    else results.push('Groq: ✗ Not configured')
-
-    setSources([...newSources])
-    setTestResults(results)
-  }
+  }, [completeReels])
 
   return (
     <div className="p-6 space-y-6 max-w-3xl mx-auto">
       <div>
         <h2 className="text-xl font-bold">Data Sources</h2>
         <p className="text-sm text-zinc-500 mt-1">
-          See which sources provide data for your Reels. Free sources first, Apify for transcripts.
+          Where your reel data came from. Free sources first, Apify for transcripts.
         </p>
       </div>
 
-      {/* Pipeline */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-        <h3 className="text-sm font-medium text-zinc-300 mb-4">Data Pipeline</h3>
-        <div className="flex items-center gap-2 text-xs flex-wrap">
-          <div className="px-3 py-2 bg-cyan-500/10 border border-cyan-500/20 rounded-lg text-cyan-400">
-            <Globe size={12} className="inline mr-1" />
-            GraphQL Worker (Free)
-          </div>
-          <ArrowRight size={12} className="text-zinc-600" />
-          <div className="px-3 py-2 bg-orange-500/10 border border-orange-500/20 rounded-lg text-orange-400">
-            <Bot size={12} className="inline mr-1" />
-            Apify (Paid)
-          </div>
-          <ArrowRight size={12} className="text-zinc-600" />
-          <div className="px-3 py-2 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-indigo-400">
-            <Zap size={12} className="inline mr-1" />
-            Groq AI (Free)
-          </div>
+      {/* Config status */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+        <h3 className="text-sm font-medium text-zinc-300 mb-3">Configured Sources</h3>
+        <div className="flex items-center gap-3 text-xs flex-wrap">
+          <span className={`flex items-center gap-1.5 px-2 py-1 rounded-lg ${workerUrl ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-500 border border-zinc-700'}`}>
+            <Globe size={10} /> GraphQL Worker {workerUrl ? '✓' : '—'}
+          </span>
+          <span className={`flex items-center gap-1.5 px-2 py-1 rounded-lg ${apifyApiKey ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-500 border border-zinc-700'}`}>
+            <Bot size={10} /> Apify {apifyApiKey ? '✓' : '—'}
+          </span>
+          <span className={`flex items-center gap-1.5 px-2 py-1 rounded-lg ${groqApiKey ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-500 border border-zinc-700'}`}>
+            <Zap size={10} /> Groq AI {groqApiKey ? '✓' : '—'}
+          </span>
         </div>
-        <p className="text-xs text-zinc-500 mt-3">
-          GraphQL Worker fetches metadata (free). If no transcript found, Apify fetches it (paid). Then Groq analyzes everything (free).
-        </p>
       </div>
 
-      {/* Source cards */}
-      <div className="space-y-3">
-        {sources.map((source, i) => {
-          const Icon = source.icon
-          return (
-            <div key={i} className={`bg-zinc-900 border rounded-xl p-4 ${
-              source.tested && source.working ? 'border-emerald-500/30'
-              : source.tested && !source.working ? 'border-red-500/20'
-              : 'border-zinc-800'
-            }`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-${source.color}-500/10`}>
-                    <Icon size={16} className={`text-${source.color}-400`} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-medium text-sm">{source.name}</h4>
-                      {!source.configured && (
-                        <span className="text-xs px-1.5 py-0.5 bg-zinc-800 text-zinc-500 rounded">Not configured</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      Fields: {source.fields.join(', ')}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    source.cost === 'FREE' || source.cost.startsWith('FREE')
-                      ? 'bg-emerald-500/10 text-emerald-400'
-                      : 'bg-orange-500/10 text-orange-400'
-                  }`}>
-                    {source.cost}
-                  </span>
-                  {source.testing && <Loader2 size={14} className="animate-spin text-zinc-400" />}
-                  {source.tested && source.working && <CheckCircle2 size={14} className="text-emerald-400" />}
-                  {source.tested && !source.working && <XCircle size={14} className="text-red-400" />}
-                  {!source.tested && !source.testing && (
-                    <span className="text-xs text-zinc-600">Not tested</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Test button */}
-      <button
-        onClick={handleTestAll}
-        disabled={sources.some(s => s.testing)}
-        className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-      >
-        {sources.some(s => s.testing)
-          ? <><Loader2 size={16} className="animate-spin" /> Testing sources...</>
-          : <>Test All Sources</>
-        }
-      </button>
-
-      {/* Test results */}
-      {testResults.length > 0 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
-          <h3 className="text-sm font-medium text-zinc-300">Test Results</h3>
-          {testResults.map((r, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs">
-              {r.includes('✓') ? (
-                <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
-              ) : (
-                <AlertCircle size={12} className="text-red-400 shrink-0" />
-              )}
-              <span className={r.includes('✓') ? 'text-zinc-300' : 'text-red-400'}>{r}</span>
-            </div>
-          ))}
-          <div className="text-xs text-zinc-500 mt-2 pt-2 border-t border-zinc-800">
-            <p>Free sources: {testResults.filter(r => r.includes('✓') && !r.includes('Apify')).length} / {testResults.length}</p>
-            <p>Paid sources: {testResults.filter(r => r.includes('✓') && r.includes('Apify')).length}</p>
+      {/* Stats */}
+      {stats.totalReels > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 text-center">
+            <p className="text-2xl font-bold text-emerald-400">{stats.freePercent}%</p>
+            <p className="text-xs text-zinc-500 mt-1">Free Data</p>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-center">
+            <p className="text-2xl font-bold text-zinc-200">{stats.totalReels}</p>
+            <p className="text-xs text-zinc-500 mt-1">Reels Analyzed</p>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-center">
+            <p className="text-2xl font-bold text-zinc-200">{stats.totalFields}</p>
+            <p className="text-xs text-zinc-500 mt-1">Fields Extracted</p>
           </div>
         </div>
       )}
 
-      {/* Setup guide */}
+      {/* Pipeline */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+        <h3 className="text-sm font-medium text-zinc-300 mb-3">How It Works</h3>
+        <div className="space-y-2 text-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 rounded-full bg-cyan-500/10 flex items-center justify-center shrink-0">
+              <span className="text-cyan-400 font-bold">1</span>
+            </div>
+            <div>
+              <span className="text-cyan-400 font-medium">GraphQL Worker</span>
+              <span className="text-zinc-500"> — Fetches creator, caption, hashtags, video, likes (FREE)</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0">
+              <span className="text-orange-400 font-bold">2</span>
+            </div>
+            <div>
+              <span className="text-orange-400 font-medium">Apify</span>
+              <span className="text-zinc-500"> — If no transcript, fetches it from Apify (PAID, ~$0.001/reel)</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 rounded-full bg-indigo-500/10 flex items-center justify-center shrink-0">
+              <span className="text-indigo-400 font-bold">3</span>
+            </div>
+            <div>
+              <span className="text-indigo-400 font-medium">Groq AI</span>
+              <span className="text-zinc-500"> — Generates summary, tags, concepts, embeddings (FREE)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Per-reel breakdown */}
+      {stats.totalReels > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+          <h3 className="text-sm font-medium text-zinc-300 mb-3">Source Breakdown per Reel</h3>
+          <div className="space-y-2 max-h-96 overflow-auto">
+            {completeReels.map(reel => {
+              const reelSources = reel.dataSources || []
+              const freeCount = reelSources.filter(s => s.cost === 'free').reduce((n, s) => n + s.fields.length, 0)
+              const paidCount = reelSources.filter(s => s.cost === 'paid').reduce((n, s) => n + s.fields.length, 0)
+              const total = freeCount + paidCount
+
+              return (
+                <div key={reel.id} className="flex items-center gap-3 py-2 border-b border-zinc-800 last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-zinc-200 truncate">{reel.title || 'Untitled'}</p>
+                    <p className="text-xs text-zinc-500">
+                      {reelSources.map(s => {
+                        const config = SOURCE_CONFIG[s.source]
+                        const Icon = config.icon
+                        return (
+                          <span key={s.source} className={`inline-flex items-center gap-1 mr-2 text-${config.color}-400`}>
+                            <Icon size={10} /> {config.label}
+                            <span className="text-zinc-600">({s.fields.length})</span>
+                          </span>
+                        )
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {freeCount > 0 && (
+                      <span className="text-xs px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded">
+                        {freeCount} free
+                      </span>
+                    )}
+                    {paidCount > 0 && (
+                      <span className="text-xs px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded">
+                        {paidCount} paid
+                      </span>
+                    )}
+                    <div className="w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 rounded-full"
+                        style={{ width: `${total > 0 ? (freeCount / total) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {stats.totalReels === 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center">
+          <TrendingUp size={24} className="mx-auto text-zinc-600 mb-2" />
+          <p className="text-sm text-zinc-400">No reels analyzed yet.</p>
+          <p className="text-xs text-zinc-500 mt-1">Add a reel to see where data comes from.</p>
+        </div>
+      )}
+
+      {/* Setup links */}
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 space-y-2">
-        <h4 className="text-xs font-medium text-zinc-400">Quick Setup</h4>
+        <h4 className="text-xs font-medium text-zinc-400">Setup</h4>
         <ul className="text-xs text-zinc-500 space-y-1">
-          <li>• <strong className="text-zinc-300">GraphQL Worker:</strong> dash.cloudflare.com → Workers → Create Application → paste worker/instagram-proxy.js → Deploy</li>
-          <li>• <strong className="text-zinc-300">Apify:</strong> console.apify.com → free $5 credit → Settings → API Token</li>
-          <li>• <strong className="text-zinc-300">Groq:</strong> console.groq.com → API Keys → Create (free)</li>
+          {!workerUrl && (
+            <li>
+              <a href="https://dash.cloudflare.com" target="_blank" rel="noopener"
+                className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300">
+                Cloudflare Worker <ExternalLink size={8} />
+              </a>
+              — Free, 2 min setup. Paste worker/instagram-proxy.js code.
+            </li>
+          )}
+          {!apifyApiKey && (
+            <li>
+              <a href="https://console.apify.com" target="_blank" rel="noopener"
+                className="inline-flex items-center gap-1 text-orange-400 hover:text-orange-300">
+                Apify <ExternalLink size={8} />
+              </a>
+              — Free $5 credit (~3,300 reels). For transcript auto-fetch.
+            </li>
+          )}
+          {!groqApiKey && (
+            <li>
+              <a href="https://console.groq.com" target="_blank" rel="noopener"
+                className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300">
+                Groq <ExternalLink size={8} />
+              </a>
+              — Free. For AI analysis, summary, tags, embeddings.
+            </li>
+          )}
+          {workerUrl && apifyApiKey && groqApiKey && (
+            <li className="text-emerald-400">All sources configured. You're good to go!</li>
+          )}
         </ul>
       </div>
     </div>

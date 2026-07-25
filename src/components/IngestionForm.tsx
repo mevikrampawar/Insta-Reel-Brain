@@ -75,7 +75,7 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
     if (!hasTranscript && apifyApiKey) {
       setPhase('fetching-apify')
       try {
-        const { result, sources } = await fetchViaApify(apifyApiKey, targetUrl)
+        const { result, sources } = await fetchViaApify(workerUrl, apifyApiKey, targetUrl)
         allSources.push(...sources)
         if (result) {
           if (!creatorHandle && result.creatorHandle) creatorHandle = result.creatorHandle
@@ -154,6 +154,10 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
         caption: fetched.caption,
         hashtags: fetched.hashtags,
         thumbnailUrl: fetched.thumbnailUrl,
+        dataSources: [
+          ...sources,
+          { source: 'groq' as const, fields: ['summary', 'keyTakeaways', 'suggestedTags', 'concepts', 'embeddings'], cost: 'free' as const, timestamp: Date.now() },
+        ],
       })
       if (!id) throw new Error('Failed to create reel')
 
