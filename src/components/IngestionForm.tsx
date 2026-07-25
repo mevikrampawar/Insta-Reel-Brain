@@ -11,6 +11,7 @@ interface Props {
   updateReel: (id: string, data: Partial<Reel>) => Promise<void>
   onDone: () => void
   apiKey: string
+  workerUrl: string
   apifyApiKey: string
 }
 
@@ -29,7 +30,7 @@ interface FetchedData {
   transcript: string
 }
 
-export function IngestionForm({ addReel, updateReel, onDone, apiKey, apifyApiKey }: Props) {
+export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, apifyApiKey }: Props) {
   const [url, setUrl] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
   const [fetched, setFetched] = useState<FetchedData | null>(null)
@@ -44,51 +45,52 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, apifyApiKey
     currentUrlRef.current = targetUrl
     setError('')
 
+    if (!workerUrl.trim()) {
+      setPhase('error')
+      setError('No Apify Proxy configured. Go to Settings and add your Cloudflare Worker URL.')
+      currentUrlRef.current = ''
+      return
+    }
+
+    if (!apifyApiKey.trim()) {
+      setPhase('error')
+      setError('No Apify API key configured. Go to Settings and add your Apify key.')
+      currentUrlRef.current = ''
+      return
+    }
+
     setPhase('fetching')
     setProgress('Fetching reel data from Apify...')
 
-    let result: FetchedData | null = null
-    let fetchSources: DataSourceRecord[] = []
+    try {
+      const { result, sources: fetchSources } = await fetchViaApify(workerUrl.trim(), apifyApiKey.trim(), targetUrl)
 
-    if (apifyApiKey) {
-      try {
-        const { result: apifyResult, sources: apifySources } = await fetchViaApify(apifyApiKey, targetUrl)
-        if (apifyResult) {
-          result = {
-            title: apifyResult.title,
-            creatorHandle: apifyResult.creatorHandle,
-            caption: apifyResult.caption,
-            hashtags: apifyResult.hashtags,
-            thumbnailUrl: apifyResult.thumbnailUrl,
-            videoUrl: apifyResult.videoUrl,
-            likeCount: apifyResult.likeCount,
-            commentCount: apifyResult.commentCount,
-            duration: apifyResult.duration,
-            transcript: apifyResult.transcript,
-          }
-          fetchSources = apifySources
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Apify request failed')
+      if (result) {
+        setFetched({
+          title: result.title,
+          creatorHandle: result.creatorHandle,
+          caption: result.caption,
+          hashtags: result.hashtags,
+          thumbnailUrl: result.thumbnailUrl,
+          videoUrl: result.videoUrl,
+          likeCount: result.likeCount,
+          commentCount: result.commentCount,
+          duration: result.duration,
+          transcript: result.transcript,
+        })
+        setSources(fetchSources)
+        setPhase('ready')
+      } else {
+        setPhase('error')
+        setError('Apify returned no data. Check the URL and try again.')
       }
-    }
-
-    if (result) {
-      setFetched(result)
-      setSources(fetchSources)
-      setPhase('ready')
-    } else if (!error) {
+    } catch (e) {
       setPhase('error')
-      setError(!apifyApiKey
-        ? 'No Apify key configured. Go to Settings and add your Apify API key.'
-        : 'Could not fetch reel data. Check your Apify key in Settings.'
-      )
-    } else {
-      setPhase('error')
+      setError(e instanceof Error ? e.message : 'Failed to fetch reel data')
     }
 
     currentUrlRef.current = ''
-  }, [apifyApiKey, error])
+  }, [workerUrl, apifyApiKey])
 
   const handleUrlChange = (newUrl: string) => {
     setUrl(newUrl)
@@ -168,7 +170,9 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, apifyApiKey
     }
   }
 
+  const hasWorker = !!workerUrl.trim()
   const hasApify = !!apifyApiKey.trim()
+  const hasAll = hasWorker && hasApify
 
   return (
     <div className="max-w-2xl mx-auto p-8 space-y-6">
@@ -188,12 +192,17 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, apifyApiKey
           {hasApify ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
           Apify {hasApify ? '✓' : '(not set)'}
         </span>
+        <span className={`flex items-center gap-1 ${hasWorker ? 'text-emerald-400' : 'text-amber-400'}`}>
+          {hasWorker ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
+          Proxy {hasWorker ? '✓' : '(not set)'}
+        </span>
       </div>
 
-      {!hasApify && (
+      {!hasAll && (
         <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-400">
-          Go to <strong>Settings</strong> and add your Apify API key to fetch reel data.
-          Free at <a href="https://console.apify.com" target="_blank" rel="noopener" className="underline">console.apify.com</a> ($5 free credit).
+          {!hasApify && <>Go to <strong>Settings</strong> and add your Apify API key and Cloudflare Worker URL.<br /></>}
+          {hasApify && !hasWorker && <>Go to <strong>Settings</strong> and add your Cloudflare Worker URL (Apify proxy).<br /></>}
+          Worker is free at <a href="https://dash.cloudflare.com" target="_blank" rel="noopener" className="underline">dash.cloudflare.com</a>
         </div>
       )}
 
@@ -308,18 +317,8 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, apifyApiKey
 
       {/* Error */}
       {phase === 'error' && error && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 rounded-lg p-3">
-            <AlertCircle size={16} /> {error}
-          </div>
-          {!hasApify && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-xs text-zinc-400 space-y-1">
-              <p className="font-medium text-zinc-300">Setup:</p>
-              <p>1. Go to <a href="https://console.apify.com" target="_blank" rel="noopener" className="text-indigo-400 underline">console.apify.com</a> → Sign up (free $5 credit)</p>
-              <p>2. Settings → API Token → Copy</p>
-              <p>3. Paste in <strong>Settings</strong> page here → Save</p>
-            </div>
-          )}
+        <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 rounded-lg p-3">
+          <AlertCircle size={16} /> {error}
         </div>
       )}
 
