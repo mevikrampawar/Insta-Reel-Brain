@@ -68,9 +68,8 @@ export async function fetchViaApify(
 
   const runData = await withRetry(() =>
     apifyFetch(token, `actors/${ACTOR_ID}/runs`, 'POST', {
-      directUrls: [reelUrl],
-      addTranscription: true,
-      proxyConfiguration: { useApifyProxy: true },
+      username: [reelUrl],
+      resultsLimit: 1,
     })
   , { maxRetries: 2 }) as Record<string, unknown>
 
