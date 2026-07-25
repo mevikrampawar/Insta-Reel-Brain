@@ -1,10 +1,9 @@
 import { useState, useCallback, useRef } from 'react'
 import { Link, Loader2, AlertCircle, Sparkles, CheckCircle2, Video, Globe, Bot } from 'lucide-react'
-import type { Reel } from '../types'
+import type { Reel, DataSourceRecord } from '../types'
 import { processReel } from '../services/ingestion'
 import { fetchInstagramMetadata, isInstagramUrl } from '../services/instagram'
 import { fetchViaApify } from '../services/apify'
-import type { DataSourceInfo } from '../services/instagram'
 
 interface Props {
   userId: string
@@ -35,7 +34,7 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
   const [url, setUrl] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
   const [fetched, setFetched] = useState<FetchedData | null>(null)
-  const [sources, setSources] = useState<DataSourceInfo[]>([])
+  const [sources, setSources] = useState<DataSourceRecord[]>([])
   const [error, setError] = useState('')
   const [progress, setProgress] = useState('')
   const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -48,7 +47,7 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
 
     let title = '', creatorHandle = '', caption = '', hashtags: string[] = []
     let thumbnailUrl = '', videoUrl = '', likeCount = 0, commentCount = 0, duration = 0, transcript = ''
-    const allSources: DataSourceInfo[] = []
+    const allSources: DataSourceRecord[] = []
 
     if (workerUrl) {
       setPhase('fetching-free')

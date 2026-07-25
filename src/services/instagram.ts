@@ -1,3 +1,5 @@
+import type { DataSourceRecord } from '../types'
+
 export interface InstagramMetadata {
   title: string
   creatorHandle: string
@@ -10,13 +12,6 @@ export interface InstagramMetadata {
   duration: number
 }
 
-export interface DataSourceInfo {
-  source: 'graphql' | 'apify'
-  fields: string[]
-  cost: 'free' | 'paid'
-  timestamp: number
-}
-
 function extractShortcode(url: string): string | null {
   const match = url.match(/instagram\.com\/reel\/([A-Za-z0-9_-]+)/)
     || url.match(/instagram\.com\/p\/([A-Za-z0-9_-]+)/)
@@ -24,111 +19,139 @@ function extractShortcode(url: string): string | null {
   return match?.[1] || null
 }
 
-function normalizeWorkerUrl(url: string): string {
+function normalizeUrl(url: string): string {
   const trimmed = url.trim()
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed
-  return `https://${trimmed}`
+  return trimmed.startsWith('http') ? trimmed : `https://${trimmed}`
 }
 
-async function fetchViaGraphQL(workerUrl: string, shortcode: string): Promise<{ result: InstagramMetadata | null; fields: string[] }> {
-  const normalizedUrl = normalizeWorkerUrl(workerUrl)
+function parseGraphQLResponse(data: any): { result: InstagramMetadata | null; fields: string[] } {
+  const media = data?.shortcode_media
+  if (!media) return { result: null, fields: [] }
+
+  const caption = media.edge_media_to_caption?.edges?.[0]?.node?.text || ''
+  const hashtags = [...new Set<string>(
+    (caption.match(/#[\w]+/g) || []).map((h: string) => h.slice(1).toLowerCase())
+  )]
+  const owner = media.owner || {}
+  const fields: string[] = []
+
+  const result: InstagramMetadata = {
+    title: '',
+    creatorHandle: owner.username || '',
+    caption,
+    hashtags,
+    thumbnailUrl: media.thumbnail_src || media.display_url || '',
+    videoUrl: media.video_url || '',
+    likeCount: media.edge_media_preview_like?.count || 0,
+    commentCount: media.edge_media_preview_comment?.count || 0,
+    duration: media.video_duration || 0,
+  }
+
+  if (result.creatorHandle) fields.push('creatorHandle')
+  if (result.caption) fields.push('caption')
+  if (result.hashtags.length > 0) fields.push('hashtags')
+  if (result.thumbnailUrl) fields.push('thumbnailUrl')
+  if (result.videoUrl) fields.push('videoUrl')
+  if (result.likeCount > 0) fields.push('likeCount')
+  if (result.commentCount > 0) fields.push('commentCount')
+  if (result.duration > 0) fields.push('duration')
+
+  return { result, fields }
+}
+
+async function tryWorker(workerUrl: string, shortcode: string): Promise<{ result: InstagramMetadata | null; fields: string[] }> {
   try {
-    const res = await fetch(normalizedUrl, {
+    const res = await fetch(normalizeUrl(workerUrl), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ shortcode }),
     })
     if (!res.ok) return { result: null, fields: [] }
     const data = await res.json()
-    if (!data) return { result: null, fields: [] }
-
-    const media = data.shortcode_media || data
-    const caption = media.edge_media_to_caption?.edges?.[0]?.node?.text || ''
-    const hashtags = [...new Set<string>(
-      (caption.match(/#[\w]+/g) || []).map((h: string) => h.slice(1).toLowerCase())
-    )]
-    const owner = media.owner || {}
-    const fields: string[] = []
-
-    const result: InstagramMetadata = {
-      title: '',
-      creatorHandle: owner.username || '',
-      caption,
-      hashtags,
-      thumbnailUrl: media.thumbnail_src || media.display_url || '',
-      videoUrl: media.video_url || '',
-      likeCount: media.edge_media_preview_like?.count || 0,
-      commentCount: media.edge_media_preview_comment?.count || 0,
-      duration: media.video_duration || 0,
-    }
-
-    if (result.creatorHandle) fields.push('creatorHandle')
-    if (result.caption) fields.push('caption')
-    if (result.hashtags.length > 0) fields.push('hashtags')
-    if (result.thumbnailUrl) fields.push('thumbnailUrl')
-    if (result.videoUrl) fields.push('videoUrl')
-    if (result.likeCount > 0) fields.push('likeCount')
-    if (result.commentCount > 0) fields.push('commentCount')
-    if (result.duration > 0) fields.push('duration')
-
-    return { result, fields }
+    return parseGraphQLResponse(data)
   } catch {
     return { result: null, fields: [] }
   }
 }
 
+async function tryCorsProxy(shortcode: string): Promise<{ result: InstagramMetadata | null; fields: string[] }> {
+  const payload = new URLSearchParams({
+    variables: JSON.stringify({ shortcode }),
+    doc_id: '24368985919464652',
+  }).toString()
+
+  const proxies = [
+    `https://corsproxy.io/?url=${encodeURIComponent('https://www.instagram.com/graphql/query/')}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent('https://www.instagram.com/graphql/query/')}`,
+  ]
+
+  for (const proxyUrl of proxies) {
+    try {
+      const res = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: payload,
+      })
+      if (!res.ok) continue
+      const data = await res.json()
+      const parsed = parseGraphQLResponse(data)
+      if (parsed.result) return parsed
+    } catch {
+      continue
+    }
+  }
+  return { result: null, fields: [] }
+}
+
 export async function fetchInstagramMetadata(
   url: string,
   workerUrl?: string,
-): Promise<{ metadata: InstagramMetadata | null; sources: DataSourceInfo[] }> {
-  const sources: DataSourceInfo[] = []
+): Promise<{ metadata: InstagramMetadata | null; sources: DataSourceRecord[] }> {
+  const sources: DataSourceRecord[] = []
   const merged: InstagramMetadata = {
     title: '', creatorHandle: '', caption: '', hashtags: [],
     thumbnailUrl: '', videoUrl: '', likeCount: 0, commentCount: 0, duration: 0,
   }
 
+  const shortcode = extractShortcode(url)
+  if (!shortcode) return { metadata: null, sources }
+
+  // Try worker first, then CORS proxy
+  let result: InstagramMetadata | null = null
+  let fields: string[] = []
+
   if (workerUrl) {
-    const shortcode = extractShortcode(url)
-    if (shortcode) {
-      const { result, fields } = await fetchViaGraphQL(workerUrl, shortcode)
-      if (result) {
-        if (result.creatorHandle) merged.creatorHandle = result.creatorHandle
-        if (result.caption) merged.caption = result.caption
-        if (result.hashtags.length > 0) merged.hashtags = result.hashtags
-        if (result.thumbnailUrl) merged.thumbnailUrl = result.thumbnailUrl
-        if (result.videoUrl) merged.videoUrl = result.videoUrl
-        if (result.likeCount > 0) merged.likeCount = result.likeCount
-        if (result.commentCount > 0) merged.commentCount = result.commentCount
-        if (result.duration > 0) merged.duration = result.duration
-        if (fields.length > 0) {
-          sources.push({ source: 'graphql', fields, cost: 'free', timestamp: Date.now() })
-        }
-      }
+    const r = await tryWorker(workerUrl, shortcode)
+    result = r.result
+    fields = r.fields
+  }
+
+  if (!result?.creatorHandle) {
+    const r = await tryCorsProxy(shortcode)
+    if (r.result) {
+      result = r.result
+      fields = r.fields
+    }
+  }
+
+  if (result) {
+    if (result.creatorHandle) merged.creatorHandle = result.creatorHandle
+    if (result.caption) merged.caption = result.caption
+    if (result.hashtags.length > 0) merged.hashtags = result.hashtags
+    if (result.thumbnailUrl) merged.thumbnailUrl = result.thumbnailUrl
+    if (result.videoUrl) merged.videoUrl = result.videoUrl
+    if (result.likeCount > 0) merged.likeCount = result.likeCount
+    if (result.commentCount > 0) merged.commentCount = result.commentCount
+    if (result.duration > 0) merged.duration = result.duration
+    if (fields.length > 0) {
+      sources.push({ source: 'graphql', fields, cost: 'free', timestamp: Date.now() })
     }
   }
 
   const hasData = merged.creatorHandle || merged.caption || merged.thumbnailUrl
-  return {
-    metadata: hasData ? merged : null,
-    sources,
-  }
+  return { metadata: hasData ? merged : null, sources }
 }
 
 export function isInstagramUrl(url: string): boolean {
   return /instagram\.com\/(reel|p|tv)\//.test(url)
-}
-
-export function validateWorkerUrl(url: string): { valid: boolean; error?: string } {
-  const trimmed = url.trim()
-  if (!trimmed) return { valid: false, error: 'Worker URL is required' }
-  const normalized = normalizeWorkerUrl(trimmed)
-  try {
-    new URL(normalized)
-  } catch {
-    return { valid: false, error: 'Invalid URL format' }
-  }
-  if (!normalized.includes('workers.dev')) {
-    return { valid: false, error: 'URL must be a Cloudflare Workers URL (*.workers.dev)' }
-  }
-  return { valid: true }
 }

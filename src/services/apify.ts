@@ -1,3 +1,6 @@
+import type { DataSourceRecord } from '../types'
+
+const APIFY_BASE = 'https://api.apify.com/v2'
 const ACTOR_ID = 'apify/instagram-reel-scraper'
 
 export interface ApifyResult {
@@ -13,63 +16,69 @@ export interface ApifyResult {
   transcript: string
 }
 
-export interface DataSourceInfo {
-  source: 'graphql' | 'apify'
-  fields: string[]
-  cost: 'free' | 'paid'
-  timestamp: number
-}
-
-function normalizeWorkerUrl(url: string): string {
-  const trimmed = url.trim()
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed
-  return `https://${trimmed}`
-}
-
 async function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms))
 }
 
-async function proxyFetch(workerUrl: string, endpoint: string, method: string, payload?: object): Promise<{ status: number; data: any }> {
-  const normalizedUrl = normalizeWorkerUrl(workerUrl)
-  const res = await fetch(`${normalizedUrl}?action=apify`, {
+async function proxyFetch(workerUrl: string, endpoint: string, method: string, payload?: object): Promise<any> {
+  const base = workerUrl.trim().startsWith('http') ? workerUrl.trim() : `https://${workerUrl.trim()}`
+  const res = await fetch(`${base}?action=apify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ endpoint, method, payload }),
   })
-  const data = await res.json()
-  return { status: res.status, data }
+  if (!res.ok) throw new Error(`Worker proxy failed: ${res.status}`)
+  return res.json()
 }
 
-async function pollRun(workerUrl: string, runUrl: string, apifyToken: string, maxWaitSec = 120): Promise<string> {
+async function corsProxyFetch(url: string, method: string, body?: string): Promise<any> {
+  const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(url)}`
+  const res = await fetch(proxyUrl, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  })
+  if (!res.ok) throw new Error(`CORS proxy failed: ${res.status}`)
+  return res.json()
+}
+
+async function apifyRequest(workerUrl: string | undefined, endpoint: string, method: string, payload?: object): Promise<any> {
+  if (workerUrl) {
+    return proxyFetch(workerUrl, endpoint, method, payload)
+  }
+  const url = `${APIFY_BASE}/${endpoint}`
+  return corsProxyFetch(url, method, payload ? JSON.stringify(payload) : undefined)
+}
+
+async function pollRun(workerUrl: string | undefined, runUrl: string, apifyToken: string, maxWaitSec = 120): Promise<string> {
   const deadline = Date.now() + maxWaitSec * 1000
+  const endpoint = runUrl.replace('https://api.apify.com/v2/', '')
 
   while (Date.now() < deadline) {
-    const endpoint = runUrl.replace('https://api.apify.com/v2/', '')
-    const { status, data } = await proxyFetch(workerUrl, `${endpoint}?token=${apifyToken}`, 'GET')
-
-    if (status >= 200 && status < 300) {
-      const runStatus = data.data?.status
-      if (runStatus === 'SUCCEEDED') return data.data.defaultDatasetId
-      if (runStatus === 'FAILED' || runStatus === 'ABORTED' || runStatus === 'TIMED-OUT') {
-        throw new Error(`Apify run ${runStatus.toLowerCase()}`)
+    try {
+      const data = await apifyRequest(workerUrl, `${endpoint}?token=${apifyToken}`, 'GET')
+      const status = data.data?.status
+      if (status === 'SUCCEEDED') return data.data.defaultDatasetId
+      if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
+        throw new Error(`Apify run ${status.toLowerCase()}`)
       }
+    } catch {
+      // continue polling
     }
-
     await sleep(2000)
   }
   throw new Error('Apify run timed out (2 min)')
 }
 
 export async function fetchViaApify(
-  workerUrl: string,
+  workerUrl: string | undefined,
   apifyApiKey: string,
   url: string,
-): Promise<{ result: ApifyResult | null; sources: DataSourceInfo[] }> {
-  const sources: DataSourceInfo[] = []
+): Promise<{ result: ApifyResult | null; sources: DataSourceRecord[] }> {
+  const sources: DataSourceRecord[] = []
 
   try {
-    const { status: runStatus, data: runData } = await proxyFetch(
+    const runData = await apifyRequest(
       workerUrl,
       `acts/${ACTOR_ID}/runs?token=${apifyApiKey}`,
       'POST',
@@ -80,23 +89,23 @@ export async function fetchViaApify(
       },
     )
 
-    if (runStatus < 200 || runStatus >= 300) {
-      throw new Error(runData?.error?.message || `Apify run failed: ${runStatus}`)
-    }
-
     const datasetId = await pollRun(workerUrl, runData.data.defaultRunUrl, apifyApiKey)
 
-    const { status: dsStatus, data: dsData } = await proxyFetch(
+    const dsData = await apifyRequest(
       workerUrl,
       `datasets/${datasetId}/items?token=${apifyApiKey}&format=json`,
       'GET',
     )
 
-    if (dsStatus < 200 || dsStatus >= 300) throw new Error(`Apify dataset failed: ${dsStatus}`)
-
     if (!dsData || !Array.isArray(dsData) || dsData.length === 0) return { result: null, sources }
 
     const item = dsData[0]
+    const caption = item.caption || item.text || ''
+    const hashtags = item.hashtags || [
+      ...new Set<string>(
+        (caption.match(/#[\w]+/g) || []).map((h: string) => h.slice(1).toLowerCase())
+      ),
+    ]
 
     sources.push({
       source: 'apify',
@@ -104,13 +113,6 @@ export async function fetchViaApify(
       cost: 'paid',
       timestamp: Date.now(),
     })
-
-    const caption = item.caption || item.text || ''
-    const hashtags = item.hashtags || [
-      ...new Set<string>(
-        (caption.match(/#[\w]+/g) || []).map((h: string) => h.slice(1).toLowerCase())
-      ),
-    ]
 
     return {
       result: {
