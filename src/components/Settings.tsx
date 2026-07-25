@@ -253,10 +253,7 @@ function KeyCard({
         {icon}
         <h3 className="font-medium">{title}</h3>
         <span className={`text-xs px-2 py-0.5 rounded ${badge.cls}`}>{badge.text}</span>
-        {optional && !hasValue && (
-          <span className="text-xs px-2 py-0.5 bg-zinc-800 text-zinc-500 rounded ml-auto">Optional</span>
-        )}
-        {!optional && !state.saving && !state.savedFlash && hasValue && !unsaved && (
+        {!state.saving && !state.savedFlash && hasValue && !unsaved && (
           <span className="ml-auto flex items-center gap-1 text-xs text-emerald-400"><Check size={12} /> Saved</span>
         )}
         {state.savedFlash && (
@@ -342,9 +339,6 @@ function WorkerCard({ state, onChange, onSave, onClear, onTest }: {
         <Globe size={16} className="text-cyan-400" />
         <h3 className="font-medium">Instagram Proxy (Cloudflare Worker)</h3>
         <span className="text-xs px-2 py-0.5 bg-cyan-500/10 text-cyan-400 rounded">Optional</span>
-        {!hasValue && (
-          <span className="text-xs px-2 py-0.5 bg-zinc-800 text-zinc-500 rounded ml-auto">Optional</span>
-        )}
         {!state.saving && !state.savedFlash && hasValue && !unsaved && (
           <span className="ml-auto flex items-center gap-1 text-xs text-emerald-400"><Check size={12} /> Saved</span>
         )}

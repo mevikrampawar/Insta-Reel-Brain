@@ -43,14 +43,20 @@ async function corsProxyFetch(url: string, method: string, body?: string): Promi
 }
 
 async function apifyRequest(workerUrl: string | undefined, endpoint: string, method: string, payload?: object): Promise<any> {
+  // Try worker first if configured
   if (workerUrl) {
-    return proxyFetch(workerUrl, endpoint, method, payload)
+    try {
+      return await proxyFetch(workerUrl, endpoint, method, payload)
+    } catch {
+      // Worker failed, fall through to CORS proxy
+    }
   }
+  // Fallback to CORS proxy
   const url = `${APIFY_BASE}/${endpoint}`
   return corsProxyFetch(url, method, payload ? JSON.stringify(payload) : undefined)
 }
 
-async function pollRun(workerUrl: string | undefined, runUrl: string, apifyToken: string, maxWaitSec = 120): Promise<string> {
+async function pollRun(workerUrl: string | undefined, runUrl: string, apifyToken: string, maxWaitSec = 90): Promise<string> {
   const deadline = Date.now() + maxWaitSec * 1000
   const endpoint = runUrl.replace('https://api.apify.com/v2/', '')
 
@@ -67,7 +73,7 @@ async function pollRun(workerUrl: string | undefined, runUrl: string, apifyToken
     }
     await sleep(2000)
   }
-  throw new Error('Apify run timed out (2 min)')
+  throw new Error('Apify run timed out (90s)')
 }
 
 export async function fetchViaApify(
