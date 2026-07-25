@@ -19,59 +19,77 @@ async function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms))
 }
 
-async function apifyCall(workerUrl: string, token: string, endpoint: string, payload: object): Promise<any> {
-  const base = workerUrl.startsWith('http') ? workerUrl : `https://${workerUrl}`
-  const res = await fetch(base, {
+async function backendPost(backendUrl: string, body: object): Promise<any> {
+  const res = await fetch(`${backendUrl}/api/apify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, endpoint, payload }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.error || `Worker failed: ${res.status}`)
+    throw new Error(err.error?.message || `Backend error: ${res.status}`)
   }
   return res.json()
 }
 
-async function pollRun(workerUrl: string, token: string, runUrl: string, maxWaitSec = 90): Promise<string> {
+async function pollRun(backendUrl: string, runUrl: string, token: string, maxWaitSec = 120): Promise<string> {
   const deadline = Date.now() + maxWaitSec * 1000
-  const endpoint = runUrl.replace('https://api.apify.com/v2/', '')
 
   while (Date.now() < deadline) {
     try {
-      const data = await apifyCall(workerUrl, token, `${endpoint}?token=${token}`, {})
-      const status = data.data?.status
-      if (status === 'SUCCEEDED') return data.data.defaultDatasetId
-      if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-        throw new Error(`Apify run ${status.toLowerCase()}`)
+      const res = await fetch(`${backendUrl}/api/apify/run?token=${token}&runUrl=${encodeURIComponent(runUrl)}`)
+      if (res.ok) {
+        const data = await res.json()
+        const status = data.data?.status
+        if (status === 'SUCCEEDED') return data.data.defaultDatasetId
+        if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
+          throw new Error(`Apify run ${status.toLowerCase()}`)
+        }
       }
-    } catch {
-      // continue polling
+    } catch (e: any) {
+      if (e.message?.includes('run ')) throw e
     }
-    await sleep(2000)
+    await sleep(3000)
   }
-  throw new Error('Apify timed out (90s)')
+  throw new Error('Apify timed out (2 min)')
 }
 
 export async function fetchViaApify(
-  workerUrl: string,
   apifyApiKey: string,
-  url: string,
+  reelUrl: string,
+  backendUrl?: string,
 ): Promise<{ result: ApifyResult | null; sources: DataSourceRecord[] }> {
   const sources: DataSourceRecord[] = []
+  const token = apifyApiKey.trim()
+  const backend = backendUrl?.trim()
 
-  // Start actor run
-  const runData = await apifyCall(workerUrl, apifyApiKey, `acts/${ACTOR_ID}/runs?token=${apifyApiKey}`, {
-    directUrls: [url],
-    addTranscription: true,
-    proxyConfiguration: { useApifyProxy: true },
+  if (!backend) {
+    throw new Error('Backend URL not configured. Go to Settings and add your backend URL.')
+  }
+
+  // Start actor run through backend
+  const runData = await backendPost(backend, {
+    token,
+    endpoint: `acts/${ACTOR_ID}/runs`,
+    payload: {
+      directUrls: [reelUrl],
+      addTranscription: true,
+      proxyConfiguration: { useApifyProxy: true },
+    },
   })
 
   // Poll until done
-  const datasetId = await pollRun(workerUrl, apifyApiKey, runData.data.defaultRunUrl)
+  const runUrl = runData.data?.defaultRunUrl
+  if (!runUrl) throw new Error('No run URL returned from Apify')
 
-  // Fetch results
-  const dsData = await apifyCall(workerUrl, apifyApiKey, `datasets/${datasetId}/items?token=${apifyApiKey}&format=json`, {})
+  const datasetId = await pollRun(backend, runUrl, token)
+
+  // Fetch results through backend
+  const dsData = await backendPost(backend, {
+    token,
+    endpoint: `datasets/${datasetId}/items?format=json`,
+    payload: {},
+  })
 
   if (!dsData || !Array.isArray(dsData) || dsData.length === 0) return { result: null, sources }
 
