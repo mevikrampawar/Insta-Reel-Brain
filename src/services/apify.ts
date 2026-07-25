@@ -28,11 +28,11 @@ async function apifyFetch(
   method: string = 'GET',
   payload?: object,
 ): Promise<unknown> {
-  const targetUrl = `${APIFY_BASE}/${endpoint}`
+  const sep = endpoint.includes('?') ? '&' : '?'
+  const targetUrl = `${APIFY_BASE}/${endpoint}${sep}token=${token}`
   const proxyUrl = `${CORS_PROXY}${encodeURIComponent(targetUrl)}`
   const res = await fetch(proxyUrl, {
     method,
-    headers: { Authorization: `Bearer ${token}` },
     ...(payload ? { body: JSON.stringify(payload) } : {}),
   })
   if (!res.ok) {

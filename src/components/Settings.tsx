@@ -89,9 +89,9 @@ export function Settings({ userId }: Props) {
     if (!apify.local.trim()) return
     setApify(s => ({ ...s, testing: true, testResult: null }))
     try {
-      const targetUrl = 'https://api.apify.com/v2/users/me'
+      const targetUrl = `https://api.apify.com/v2/users/me?token=${apify.local.trim()}`
       const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`
-      const r = await fetch(proxyUrl, { headers: { Authorization: `Bearer ${apify.local.trim()}` } })
+      const r = await fetch(proxyUrl)
       setApify(s => ({ ...s, testing: false, testResult: r.ok ? 'ok' : 'fail' }))
     } catch { setApify(s => ({ ...s, testing: false, testResult: 'fail' })) }
     setTimeout(() => setApify(s => ({ ...s, testResult: null })), 4000)
