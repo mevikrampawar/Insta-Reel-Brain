@@ -13,7 +13,7 @@ export function DataSources({ reels, apifyApiKey, groqApiKey }: Props) {
 
   const stats = useMemo(() => {
     const allSources = completeReels.flatMap(r => r.dataSources || [])
-    const freeFields = allSources.filter(s => s.cost === 'free').reduce((n, s) => n + s.fields.length, 0)
+    const freeFields = allSources.filter(s => s.cost === 'free' || s.cost === 'free-tier').reduce((n, s) => n + s.fields.length, 0)
     const paidFields = allSources.filter(s => s.cost === 'paid').reduce((n, s) => n + s.fields.length, 0)
     const totalFields = freeFields + paidFields
 
@@ -71,7 +71,7 @@ export function DataSources({ reels, apifyApiKey, groqApiKey }: Props) {
           <div className="space-y-2 max-h-96 overflow-auto">
             {completeReels.map(reel => {
               const reelSources = reel.dataSources || []
-              const freeCount = reelSources.filter(s => s.cost === 'free').reduce((n, s) => n + s.fields.length, 0)
+              const freeCount = reelSources.filter(s => s.cost === 'free' || s.cost === 'free-tier').reduce((n, s) => n + s.fields.length, 0)
               const paidCount = reelSources.filter(s => s.cost === 'paid').reduce((n, s) => n + s.fields.length, 0)
               const total = freeCount + paidCount
 

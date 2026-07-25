@@ -10,23 +10,46 @@ const COLORS = { reel: '#6366f1', topic: '#10b981', skill: '#f59e0b', person: '#
 
 export function NeuralGraph({ reels }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const { nodes, edges } = useMemo(() => {
     const nodes: Node[] = []
     const edges: Edge[] = []
-    const conceptMap = new Map<string, string>()
+    const conceptMap = new Map<string, { node: Node; reels: Set<string> }>()
 
-    for (const reel of reels.filter(r => r.ingestStatus === 'complete')) {
+    const completeReels = reels.filter(r => r.ingestStatus === 'complete')
+
+    for (const reel of completeReels) {
       const rid = `reel-${reel.id}`
       nodes.push({ id: rid, name: reel.title?.slice(0, 30) || 'Untitled', type: 'reel', x: Math.random() * 800, y: Math.random() * 600, vx: 0, vy: 0, val: 3, color: COLORS.reel })
 
       for (const c of reel.concepts || []) {
         const cid = `concept-${c.conceptName}`
         if (!conceptMap.has(cid)) {
-          conceptMap.set(cid, cid)
-          nodes.push({ id: cid, name: c.conceptName, type: 'concept', x: Math.random() * 800, y: Math.random() * 600, vx: 0, vy: 0, val: 2, color: COLORS[c.conceptType as keyof typeof COLORS] || '#71717a' })
+          const node: Node = { id: cid, name: c.conceptName, type: 'concept', x: Math.random() * 800, y: Math.random() * 600, vx: 0, vy: 0, val: 2, color: COLORS[c.conceptType as keyof typeof COLORS] || '#71717a' }
+          conceptMap.set(cid, { node, reels: new Set() })
+          nodes.push(node)
         }
+        conceptMap.get(cid)!.reels.add(rid)
         edges.push({ source: rid, target: cid, weight: c.weight || 0.5 })
+      }
+    }
+
+    // Add concept-concept edges based on co-occurrence in reels
+    const conceptEntries = Array.from(conceptMap.entries())
+    for (let i = 0; i < conceptEntries.length; i++) {
+      for (let j = i + 1; j < conceptEntries.length; j++) {
+        const [idA, dataA] = conceptEntries[i]
+        const [idB, dataB] = conceptEntries[j]
+        const sharedReels = [...dataA.reels].filter(r => dataB.reels.has(r))
+        if (sharedReels.length >= 2) {
+          // Weight = Jaccard similarity of shared reels
+          const union = new Set([...dataA.reels, ...dataB.reels]).size
+          const weight = sharedReels.length / union
+          if (weight > 0.2) {
+            edges.push({ source: idA, target: idB, weight: weight * 0.6 })
+          }
+        }
       }
     }
 
@@ -35,14 +58,24 @@ export function NeuralGraph({ reels }: Props) {
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    const container = containerRef.current
+    if (!canvas || !container) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const W = canvas.parentElement?.clientWidth || 900
-    const H = canvas.parentElement?.clientHeight || 600
+    let W = container.clientWidth || 900
+    let H = container.clientHeight || 600
     canvas.width = W
     canvas.height = H
+
+    const onResize = () => {
+      W = container.clientWidth || 900
+      H = container.clientHeight || 600
+      canvas.width = W
+      canvas.height = H
+    }
+    const resizeObs = new ResizeObserver(onResize)
+    resizeObs.observe(container)
 
     const nodeMap = new Map(nodes.map(n => [n.id, n]))
     let frame: number
@@ -59,6 +92,20 @@ export function NeuralGraph({ reels }: Props) {
         t.vx -= (dx / dist) * force; t.vy -= (dy / dist) * force
       }
 
+      // Repulsion between all nodes
+      for (const n of nodes) {
+        for (const m of nodes) {
+          if (n === m) continue
+          const dx = m.x - n.x, dy = m.y - n.y
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1
+          if (dist < 100) {
+            const force = -50 / (dist * dist)
+            n.vx += (dx / dist) * force
+            n.vy += (dy / dist) * force
+          }
+        }
+      }
+
       // Center gravity
       for (const n of nodes) {
         n.vx += (W / 2 - n.x) * 0.0005
@@ -73,12 +120,12 @@ export function NeuralGraph({ reels }: Props) {
       ctx.clearRect(0, 0, W, H)
 
       // Edges
-      ctx.globalAlpha = 0.3
-      ctx.strokeStyle = '#3f3f46'
-      ctx.lineWidth = 1
       for (const e of edges) {
         const s = nodeMap.get(e.source), t = nodeMap.get(e.target)
         if (!s || !t) continue
+        ctx.globalAlpha = Math.min(e.weight * 0.5, 0.4)
+        ctx.strokeStyle = s.type === 'concept' && t.type === 'concept' ? '#6366f1' : '#3f3f46'
+        ctx.lineWidth = e.weight * 2
         ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y); ctx.stroke()
       }
 
@@ -99,11 +146,14 @@ export function NeuralGraph({ reels }: Props) {
     }
 
     draw()
-    return () => cancelAnimationFrame(frame)
+    return () => {
+      cancelAnimationFrame(frame)
+      resizeObs.disconnect()
+    }
   }, [nodes, edges])
 
   return (
-    <div className="relative w-full h-full">
+    <div ref={containerRef} className="relative w-full h-full">
       <canvas ref={canvasRef} className="w-full h-full" />
       <div className="absolute bottom-4 left-4 bg-zinc-900/90 border border-zinc-800 rounded-lg p-3 text-xs space-y-1">
         <p className="font-medium text-zinc-300 mb-1">Legend</p>

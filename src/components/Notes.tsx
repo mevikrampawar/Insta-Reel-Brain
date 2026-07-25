@@ -6,10 +6,11 @@ interface Props {
   notes: ReelNote[]
   reelTitle: string
   onAdd: (data: Partial<ReelNote>) => Promise<void>
+  onUpdate: (id: string, content: string) => Promise<void>
   onDelete: (id: string) => Promise<void>
 }
 
-export function Notes({ notes, reelTitle, onAdd, onDelete }: Props) {
+export function Notes({ notes, reelTitle, onAdd, onUpdate, onDelete }: Props) {
   const [content, setContent] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
@@ -18,6 +19,12 @@ export function Notes({ notes, reelTitle, onAdd, onDelete }: Props) {
     if (!content.trim()) return
     await onAdd({ content: content.trim() })
     setContent('')
+  }
+
+  const handleSave = async (id: string) => {
+    if (!editContent.trim()) return
+    await onUpdate(id, editContent.trim())
+    setEditingId(null)
   }
 
   return (
@@ -49,7 +56,7 @@ export function Notes({ notes, reelTitle, onAdd, onDelete }: Props) {
               <div className="flex gap-2">
                 <textarea value={editContent} onChange={e => setEditContent(e.target.value)}
                   className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs resize-none" rows={2} />
-                <button className="text-emerald-400"><Check size={12} /></button>
+                <button onClick={() => handleSave(note.id)} className="text-emerald-400"><Check size={12} /></button>
                 <button onClick={() => setEditingId(null)} className="text-zinc-500"><X size={12} /></button>
               </div>
             ) : (

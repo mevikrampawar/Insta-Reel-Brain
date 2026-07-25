@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, Loader2, BookOpen, AlertCircle } from 'lucide-react'
 import type { Reel } from '../types'
-import { chatWithLibrary } from '../services/gemini'
+import { chatWithLibrary } from '../services/groq'
+import { keywordSearch } from '../utils/search'
 
 interface Props { reels: Reel[]; apiKey: string }
 
@@ -32,7 +33,13 @@ export function Chat({ reels, apiKey }: Props) {
     setLoading(true)
 
     try {
-      const context = completeReels.slice(0, 20).map(r => ({
+      // Smart context: find most relevant reels for the question
+      const relevantResults = keywordSearch(completeReels, q)
+      const relevantReels = relevantResults.length > 0
+        ? relevantResults.slice(0, 10).map(r => r.reel)
+        : completeReels.slice(0, 10) // Fallback to first 10 if no keyword matches
+
+      const context = relevantReels.map(r => ({
         title: r.title || 'Untitled',
         summary: r.summary || '',
         transcript: r.transcript || '',

@@ -6,16 +6,17 @@ import { Notes } from './Notes'
 
 interface Props {
   reel: Reel
+  userId: string
   onDelete: (id: string) => void
   collections?: Collection[]
   onAddToCollection?: (reelId: string, collectionId: string) => void
 }
 
-export function ReelCard({ reel, onDelete, collections, onAddToCollection }: Props) {
+export function ReelCard({ reel, userId, onDelete, collections, onAddToCollection }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [showCollections, setShowCollections] = useState(false)
-  const { notes, addNote, deleteNote } = useNotes(undefined, reel.id)
+  const { notes, addNote, updateNote, deleteNote } = useNotes(userId, reel.id)
 
   if (reel.ingestStatus === 'failed') {
     return (
@@ -138,7 +139,7 @@ export function ReelCard({ reel, onDelete, collections, onAddToCollection }: Pro
       {/* Notes */}
       {showNotes && (
         <div className="border-t border-zinc-800 p-3">
-          <Notes notes={notes} reelTitle={reel.title} onAdd={addNote} onDelete={deleteNote} />
+          <Notes notes={notes} reelTitle={reel.title} onAdd={addNote} onUpdate={updateNote} onDelete={deleteNote} />
         </div>
       )}
 

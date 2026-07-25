@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Filter, Download, BarChart3, BookOpen, Tag } from 'lucide-react'
+import { Download, BarChart3, BookOpen, Tag, XCircle } from 'lucide-react'
 import type { Reel, Collection, SearchResult } from '../types'
 import { ReelCard } from './ReelCard'
 import { SearchBar } from './SearchBar'
@@ -9,10 +9,11 @@ interface Props {
   reels: Reel[]
   onDelete: (id: string) => void
   collections: Collection[]
-  apiKey: string
+  userId: string
+  onAddToCollection: (reelId: string, collectionId: string) => void
 }
 
-export function Library({ reels, onDelete, collections, apiKey }: Props) {
+export function Library({ reels, onDelete, collections, userId, onAddToCollection }: Props) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [filter, setFilter] = useState<'all' | 'complete' | 'processing' | 'failed'>('all')
   const [collectionFilter, setCollectionFilter] = useState<string>('all')
@@ -69,9 +70,9 @@ export function Library({ reels, onDelete, collections, apiKey }: Props) {
           {[
             { label: 'Total', value: stats.total, icon: BookOpen },
             { label: 'Analyzed', value: stats.complete, icon: BarChart3 },
-            { label: 'Failed', value: stats.failed, icon: Filter },
+            { label: 'Failed', value: stats.failed, icon: XCircle },
             { label: 'Tags', value: stats.tags, icon: Tag },
-            { label: 'Concepts', value: stats.concepts, icon: Filter },
+            { label: 'Concepts', value: stats.concepts, icon: Tag },
           ].map(s => (
             <div key={s.label} className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
               <div className="flex items-center gap-2 text-zinc-500 text-xs mb-1">
@@ -84,7 +85,7 @@ export function Library({ reels, onDelete, collections, apiKey }: Props) {
       )}
 
       {/* Search */}
-      <SearchBar reels={reels} onResults={setSearchResults} apiKey={apiKey} />
+      <SearchBar reels={reels} onResults={setSearchResults} />
 
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -120,8 +121,10 @@ export function Library({ reels, onDelete, collections, apiKey }: Props) {
           <ReelCard
             key={reel.id}
             reel={reel}
+            userId={userId}
             onDelete={onDelete}
             collections={collections}
+            onAddToCollection={onAddToCollection}
           />
         ))}
         {displayReels.length === 0 && (

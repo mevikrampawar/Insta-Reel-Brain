@@ -1,12 +1,5 @@
 import type { Reel, SearchResult } from '../types'
-
-export function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) return 0
-  let dot = 0, normA = 0, normB = 0
-  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; normA += a[i] ** 2; normB += b[i] ** 2 }
-  const d = Math.sqrt(normA) * Math.sqrt(normB)
-  return d > 0 ? dot / d : 0
-}
+import { buildTfIdfIndex, tfidfSearch, reelToText } from './tfidf'
 
 export function keywordSearch(reels: Reel[], q: string): SearchResult[] {
   const terms = q.toLowerCase().split(/\s+/).filter(Boolean)
@@ -24,16 +17,30 @@ export function keywordSearch(reels: Reel[], q: string): SearchResult[] {
     .sort((a, b) => b.score - a.score)
 }
 
-export function semanticSearch(reels: Reel[], emb: number[]): SearchResult[] {
-  return reels
-    .filter(r => r.ingestStatus === 'complete' && r.embedding?.length > 0)
-    .map(r => ({ reel: r, score: cosineSimilarity(r.embedding, emb), matchType: 'semantic' as const, snippet: r.summary?.slice(0, 150) || '' }))
-    .filter(r => r.score > 0.15)
-    .sort((a, b) => b.score - a.score)
+export function semanticSearch(reels: Reel[], query: string): SearchResult[] {
+  const completeReels = reels.filter(r => r.ingestStatus === 'complete')
+  if (completeReels.length === 0) return []
+
+  // Build TF-IDF index from reel text
+  const docs = completeReels.map(r => ({
+    id: r.id,
+    text: r.searchableText || reelToText(r),
+  }))
+  const index = buildTfIdfIndex(docs)
+
+  // Search
+  const results = tfidfSearch(index, query, 0.05)
+
+  return results.map(r => {
+    const reel = completeReels.find(cr => cr.id === r.id)!
+    const snippet = reel.summary?.slice(0, 150) || reel.caption?.slice(0, 150) || ''
+    return { reel, score: r.score, matchType: 'semantic' as const, snippet }
+  })
 }
 
-export function combinedSearch(reels: Reel[], q: string, emb: number[]): SearchResult[] {
-  const kw = keywordSearch(reels, q), sm = semanticSearch(reels, emb)
+export function combinedSearch(reels: Reel[], q: string): SearchResult[] {
+  const kw = keywordSearch(reels, q)
+  const sm = semanticSearch(reels, q)
   const map = new Map<string, SearchResult>()
   for (const r of kw) map.set(r.reel.id, { ...r, score: r.score * 0.4 })
   for (const r of sm) {

@@ -1,7 +1,7 @@
 export interface DataSourceRecord {
   source: 'graphql' | 'apify' | 'groq'
   fields: string[]
-  cost: 'free' | 'paid'
+  cost: 'free' | 'free-tier' | 'paid'
   timestamp: number
 }
 
@@ -26,6 +26,7 @@ export interface Reel {
   keyTakeaways: string[]
   suggestedTags: string[]
   embedding: number[]
+  searchableText?: string
   concepts: { conceptName: string; conceptType: string; weight: number }[]
   dataSources: DataSourceRecord[]
   createdAt: number

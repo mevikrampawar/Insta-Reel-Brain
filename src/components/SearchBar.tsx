@@ -2,15 +2,13 @@ import { useState } from 'react'
 import { Search, Loader2, Sparkles } from 'lucide-react'
 import type { Reel, SearchResult } from '../types'
 import { keywordSearch, combinedSearch } from '../utils/search'
-import { searchQueryToEmbedding } from '../services/gemini'
 
 interface Props {
   reels: Reel[]
   onResults: (results: SearchResult[]) => void
-  apiKey: string
 }
 
-export function SearchBar({ reels, onResults, apiKey }: Props) {
+export function SearchBar({ reels, onResults }: Props) {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [mode, setMode] = useState<'keyword' | 'semantic'>('semantic')
@@ -21,11 +19,9 @@ export function SearchBar({ reels, onResults, apiKey }: Props) {
     try {
       if (mode === 'keyword') {
         onResults(keywordSearch(reels, query))
-      } else if (apiKey) {
-        const emb = await searchQueryToEmbedding(apiKey, query)
-        onResults(combinedSearch(reels, query, emb))
       } else {
-        onResults(keywordSearch(reels, query))
+        // Semantic search uses TF-IDF — no API key needed
+        onResults(combinedSearch(reels, query))
       }
     } catch {
       onResults(keywordSearch(reels, query))
@@ -44,17 +40,15 @@ export function SearchBar({ reels, onResults, apiKey }: Props) {
           className="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
         />
       </div>
-      {apiKey && (
-        <button
-          onClick={() => setMode(m => m === 'keyword' ? 'semantic' : 'keyword')}
-          className={`px-3 py-2.5 rounded-lg text-xs font-medium border transition-colors ${
-            mode === 'semantic' ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400'
-          }`}
-          title="Toggle search mode"
-        >
-          <Sparkles size={14} />
-        </button>
-      )}
+      <button
+        onClick={() => setMode(m => m === 'keyword' ? 'semantic' : 'keyword')}
+        className={`px-3 py-2.5 rounded-lg text-xs font-medium border transition-colors ${
+          mode === 'semantic' ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+        }`}
+        title={`Switch to ${mode === 'semantic' ? 'keyword' : 'semantic'} search`}
+      >
+        <Sparkles size={14} />
+      </button>
       <button
         onClick={handleSearch}
         disabled={loading || !query.trim()}

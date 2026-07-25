@@ -1,4 +1,9 @@
+import { rateLimit } from '../utils/rateLimit'
+import { withRetry } from '../utils/retry'
+
 const BASE = 'https://api.groq.com/openai/v1'
+const RATE_LIMIT_KEY = 'groq-api'
+const MAX_PER_MINUTE = 28 // Stay under Groq's 30 req/min free tier
 
 async function callGroq(
   apiKey: string,
@@ -6,25 +11,34 @@ async function callGroq(
   opts?: { temperature?: number; max_tokens?: number; model?: string },
 ): Promise<string> {
   if (!apiKey) throw new Error('No API key configured. Go to Settings to add your Groq API key.')
-  const res = await fetch(`${BASE}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: opts?.model || 'llama-3.3-70b-versatile',
-      messages,
-      temperature: opts?.temperature ?? 0.3,
-      max_tokens: opts?.max_tokens ?? 2048,
-    }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(`Groq API error ${res.status}: ${err.error?.message || res.statusText}`)
+
+  // Rate limit check
+  const limit = rateLimit(RATE_LIMIT_KEY, MAX_PER_MINUTE)
+  if (!limit.allowed) {
+    await new Promise(r => setTimeout(r, limit.waitMs))
   }
-  const data = await res.json()
-  return data.choices?.[0]?.message?.content || ''
+
+  return withRetry(async () => {
+    const res = await fetch(`${BASE}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: opts?.model || 'llama-3.3-70b-versatile',
+        messages,
+        temperature: opts?.temperature ?? 0.3,
+        max_tokens: opts?.max_tokens ?? 2048,
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(`Groq API error ${res.status}: ${err.error?.message || res.statusText}`)
+    }
+    const data = await res.json()
+    return data.choices?.[0]?.message?.content || ''
+  }, { maxRetries: 2, baseDelayMs: 1500 })
 }
 
 export async function analyzeReel(
@@ -83,24 +97,6 @@ Respond with ONLY this JSON:
       actionItems: [],
     }
   }
-}
-
-export async function generateEmbedding(apiKey: string, text: string): Promise<number[]> {
-  const raw = await callGroq(apiKey, [
-    {
-      role: 'system',
-      content: 'Generate semantic embedding vectors. Respond with ONLY 64 comma-separated decimal numbers between -1 and 1. Nothing else.',
-    },
-    {
-      role: 'user',
-      content: `Generate embedding for: ${text.slice(0, 3000)}`,
-    },
-  ], { temperature: 0, max_tokens: 300, model: 'llama-3.3-70b-versatile' })
-
-  const numbers = raw.split(',').map(n => parseFloat(n.trim())).filter(n => !isNaN(n))
-  const vector = new Array(64).fill(0).map((_, i) => numbers[i] || 0)
-  const norm = Math.sqrt(vector.reduce((s, v) => s + v * v, 0))
-  return norm > 0 ? vector.map(v => v / norm) : vector
 }
 
 export async function chatWithLibrary(
@@ -164,8 +160,4 @@ Respond with ONLY this JSON:
     if (match) return JSON.parse(match[0])
     return { title: '', creator: '', caption: '', hashtags: [], description: '' }
   }
-}
-
-export async function searchQueryToEmbedding(apiKey: string, query: string): Promise<number[]> {
-  return generateEmbedding(apiKey, query)
 }

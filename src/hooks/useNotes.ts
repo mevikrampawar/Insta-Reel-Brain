@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { collection, addDoc, getDocs, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore'
+import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, query, where, orderBy } from 'firebase/firestore'
 import { db } from '../services/firebase'
 import type { ReelNote } from '../types'
 
@@ -8,10 +8,14 @@ export function useNotes(userId: string | undefined, reelId?: string) {
 
   const fetch = useCallback(async () => {
     if (!userId) { setNotes([]); return }
-    let q: any = query(collection(db, 'users', userId, 'notes'), orderBy('createdAt', 'desc'))
-    if (reelId) q = query(q, where('reelId', '==', reelId))
+    let q
+    if (reelId) {
+      q = query(collection(db, 'users', userId, 'notes'), where('reelId', '==', reelId), orderBy('createdAt', 'desc'))
+    } else {
+      q = query(collection(db, 'users', userId, 'notes'), orderBy('createdAt', 'desc'))
+    }
     const snap = await getDocs(q)
-    setNotes(snap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, unknown>) } as unknown as ReelNote)))
+    setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() } as ReelNote)))
   }, [userId, reelId])
 
   useEffect(() => { fetch() }, [fetch])
@@ -25,11 +29,17 @@ export function useNotes(userId: string | undefined, reelId?: string) {
     await fetch()
   }, [userId, fetch])
 
+  const updateNote = useCallback(async (id: string, content: string) => {
+    if (!userId) return
+    await updateDoc(doc(db, 'users', userId, 'notes', id), { content, updatedAt: Date.now() })
+    await fetch()
+  }, [userId, fetch])
+
   const deleteNote = useCallback(async (id: string) => {
     if (!userId) return
     await deleteDoc(doc(db, 'users', userId, 'notes', id))
     await fetch()
   }, [userId, fetch])
 
-  return { notes, addNote, deleteNote, refresh: fetch }
+  return { notes, addNote, updateNote, deleteNote, refresh: fetch }
 }

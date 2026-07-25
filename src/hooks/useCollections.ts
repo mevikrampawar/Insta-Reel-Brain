@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from 'firebase/firestore'
+import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, orderBy, arrayUnion, arrayRemove } from 'firebase/firestore'
 import { db } from '../services/firebase'
 import type { Collection } from '../types'
 
@@ -31,5 +31,17 @@ export function useCollections(userId: string | undefined) {
     await fetch()
   }, [userId, fetch])
 
-  return { collections, loading, addCollection, deleteCollection, refresh: fetch }
+  const addReelToCollection = useCallback(async (collectionId: string, reelId: string) => {
+    if (!userId) return
+    await updateDoc(doc(db, 'users', userId, 'collections', collectionId), { reelIds: arrayUnion(reelId) })
+    await fetch()
+  }, [userId, fetch])
+
+  const removeReelFromCollection = useCallback(async (collectionId: string, reelId: string) => {
+    if (!userId) return
+    await updateDoc(doc(db, 'users', userId, 'collections', collectionId), { reelIds: arrayRemove(reelId) })
+    await fetch()
+  }, [userId, fetch])
+
+  return { collections, loading, addCollection, deleteCollection, addReelToCollection, removeReelFromCollection, refresh: fetch }
 }

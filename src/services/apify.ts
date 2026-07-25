@@ -104,7 +104,7 @@ export async function fetchViaApify(
   sources.push({
     source: 'apify',
     fields: ['caption', 'hashtags', 'creatorHandle', 'thumbnailUrl', 'likeCount', 'commentCount', 'duration', 'transcript'],
-    cost: 'paid',
+    cost: 'free-tier',
     timestamp: Date.now(),
   })
 

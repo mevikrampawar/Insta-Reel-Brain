@@ -6,7 +6,6 @@ import { isInstagramUrl } from '../services/instagram'
 import { fetchViaApify } from '../services/apify'
 
 interface Props {
-  userId: string
   addReel: (data: Partial<Reel>) => Promise<string | undefined>
   updateReel: (id: string, data: Partial<Reel>) => Promise<void>
   onDone: () => void

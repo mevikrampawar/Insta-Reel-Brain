@@ -16,7 +16,7 @@ import { DataSources } from './components/DataSources'
 function Dashboard() {
   const { user, logout } = useAuth()
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel } = useReels(user?.uid)
-  const { collections, addCollection, deleteCollection } = useCollections(user?.uid)
+  const { collections, addCollection, deleteCollection, addReelToCollection } = useCollections(user?.uid)
   const { apiKey, backendUrl, apifyApiKey } = useApiKey()
   const [tab, setTab] = useState('library')
 
@@ -30,11 +30,10 @@ function Dashboard() {
         </div>
       )}
       {!reelsLoading && tab === 'library' && (
-        <Library reels={reels} onDelete={deleteReel} collections={collections} apiKey={apiKey} />
+        <Library reels={reels} onDelete={deleteReel} collections={collections} userId={user.uid} onAddToCollection={(reelId, collectionId) => addReelToCollection(collectionId, reelId)} />
       )}
       {tab === 'ingest' && (
         <IngestionForm
-          userId={user.uid}
           addReel={addReel}
           updateReel={updateReel}
           onDone={() => setTab('library')}
