@@ -13,14 +13,11 @@ import { Collections } from './components/Collections'
 import { Settings } from './components/Settings'
 import { DataSources } from './components/DataSources'
 
-function Dashboard() {
-  const { user, logout } = useAuth()
-  const { reels, loading: reelsLoading, addReel, updateReel, deleteReel } = useReels(user?.uid)
-  const { collections, addCollection, deleteCollection, addReelToCollection } = useCollections(user?.uid)
+function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAuth>['user']>; logout: () => void }) {
+  const { reels, loading: reelsLoading, addReel, updateReel, deleteReel } = useReels(user.uid)
+  const { collections, addCollection, deleteCollection, addReelToCollection } = useCollections(user.uid)
   const { apiKey, apifyApiKey } = useApiKey()
   const [tab, setTab] = useState('library')
-
-  if (!user) return null
 
   return (
     <Layout activeTab={tab} onTabChange={setTab} onLogout={logout} userPhoto={user.photoURL || undefined}>
@@ -55,7 +52,7 @@ function Dashboard() {
 }
 
 export default function App() {
-  const { user, loading, signInWithGoogle } = useAuth()
+  const { user, loading, signInWithGoogle, logout } = useAuth()
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -67,7 +64,7 @@ export default function App() {
 
   return (
     <ApiKeyProvider userId={user.uid}>
-      <Dashboard />
+      <Dashboard user={user} logout={logout} />
     </ApiKeyProvider>
   )
 }

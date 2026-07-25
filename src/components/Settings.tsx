@@ -28,13 +28,18 @@ export function Settings({ userId }: Props) {
 
   useEffect(() => {
     const load = async () => {
-      const snap = await getDoc(doc(db, 'users', userId, 'settings', 'preferences'))
-      if (snap.exists() && mounted.current) {
-        const d = snap.data()
-        setGroq({ local: d.groqApiKey || '', cloud: d.groqApiKey || '', saving: false, savedFlash: false, testing: false, testResult: null })
-        setApify({ local: d.apifyApiKey || '', cloud: d.apifyApiKey || '', saving: false, savedFlash: false, testing: false, testResult: null })
+      try {
+        const snap = await getDoc(doc(db, 'users', userId, 'settings', 'preferences'))
+        if (snap.exists() && mounted.current) {
+          const d = snap.data()
+          setGroq({ local: d.groqApiKey || '', cloud: d.groqApiKey || '', saving: false, savedFlash: false, testing: false, testResult: null })
+          setApify({ local: d.apifyApiKey || '', cloud: d.apifyApiKey || '', saving: false, savedFlash: false, testing: false, testResult: null })
+        }
+      } catch {
+        // Settings load failed — user can still type and save
+      } finally {
+        if (mounted.current) setLoading(false)
       }
-      setLoading(false)
     }
     load()
   }, [userId])
@@ -44,22 +49,30 @@ export function Settings({ userId }: Props) {
     const set = field === 'groq' ? setGroq : setApify
     const key = field === 'groq' ? 'groqApiKey' : 'apifyApiKey'
     set(p => ({ ...p, saving: true }))
-    const snap = await getDoc(doc(db, 'users', userId, 'settings', 'preferences'))
-    const ex = snap.exists() ? snap.data() : { groqApiKey: '', apifyApiKey: '' }
-    await setDoc(doc(db, 'users', userId, 'settings', 'preferences'), { ...ex, [key]: s.local.trim(), updatedAt: Date.now() })
-    set({ local: s.local.trim(), cloud: s.local.trim(), saving: false, savedFlash: true, testing: false, testResult: null })
-    setTimeout(() => set(p => ({ ...p, savedFlash: false })), 2000)
+    try {
+      const snap = await getDoc(doc(db, 'users', userId, 'settings', 'preferences'))
+      const ex = snap.exists() ? snap.data() : { groqApiKey: '', apifyApiKey: '' }
+      await setDoc(doc(db, 'users', userId, 'settings', 'preferences'), { ...ex, [key]: s.local.trim(), updatedAt: Date.now() })
+      set({ local: s.local.trim(), cloud: s.local.trim(), saving: false, savedFlash: true, testing: false, testResult: null })
+      setTimeout(() => set(p => ({ ...p, savedFlash: false })), 2000)
+    } catch {
+      set(p => ({ ...p, saving: false }))
+    }
   }, [groq, apify, userId])
 
   const clear = useCallback(async (field: 'groq' | 'apify') => {
     const set = field === 'groq' ? setGroq : setApify
     const key = field === 'groq' ? 'groqApiKey' : 'apifyApiKey'
     set(p => ({ ...p, local: '', saving: true }))
-    const snap = await getDoc(doc(db, 'users', userId, 'settings', 'preferences'))
-    const ex = snap.exists() ? snap.data() : { groqApiKey: '', apifyApiKey: '' }
-    await setDoc(doc(db, 'users', userId, 'settings', 'preferences'), { ...ex, [key]: '', updatedAt: Date.now() })
-    set({ local: '', cloud: '', saving: false, savedFlash: true, testing: false, testResult: null })
-    setTimeout(() => set(p => ({ ...p, savedFlash: false })), 2000)
+    try {
+      const snap = await getDoc(doc(db, 'users', userId, 'settings', 'preferences'))
+      const ex = snap.exists() ? snap.data() : { groqApiKey: '', apifyApiKey: '' }
+      await setDoc(doc(db, 'users', userId, 'settings', 'preferences'), { ...ex, [key]: '', updatedAt: Date.now() })
+      set({ local: '', cloud: '', saving: false, savedFlash: true, testing: false, testResult: null })
+      setTimeout(() => set(p => ({ ...p, savedFlash: false })), 2000)
+    } catch {
+      set(p => ({ ...p, saving: false }))
+    }
   }, [userId])
 
   const testGroq = useCallback(async () => {
@@ -76,7 +89,11 @@ export function Settings({ userId }: Props) {
     if (!apify.local.trim()) return
     setApify(s => ({ ...s, testing: true, testResult: null }))
     try {
-      const r = await fetch(`https://api.apify.com/v2/users/me?token=${apify.local.trim()}`)
+      const r = await fetch('https://us-central1-insta-reel-brain.cloudfunctions.net/apifyProxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apifyApiKey: apify.local.trim(), endpoint: 'users/me', method: 'GET' }),
+      })
       setApify(s => ({ ...s, testing: false, testResult: r.ok ? 'ok' : 'fail' }))
     } catch { setApify(s => ({ ...s, testing: false, testResult: 'fail' })) }
     setTimeout(() => setApify(s => ({ ...s, testResult: null })), 4000)

@@ -5,17 +5,23 @@ import type { ReelNote } from '../types'
 
 export function useNotes(userId: string | undefined, reelId?: string) {
   const [notes, setNotes] = useState<ReelNote[]>([])
+  const [error, setError] = useState<string | null>(null)
 
   const fetch = useCallback(async () => {
     if (!userId) { setNotes([]); return }
-    let q
-    if (reelId) {
-      q = query(collection(db, 'users', userId, 'notes'), where('reelId', '==', reelId), orderBy('createdAt', 'desc'))
-    } else {
-      q = query(collection(db, 'users', userId, 'notes'), orderBy('createdAt', 'desc'))
+    try {
+      let q
+      if (reelId) {
+        q = query(collection(db, 'users', userId, 'notes'), where('reelId', '==', reelId), orderBy('createdAt', 'desc'))
+      } else {
+        q = query(collection(db, 'users', userId, 'notes'), orderBy('createdAt', 'desc'))
+      }
+      const snap = await getDocs(q)
+      setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() } as ReelNote)))
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load notes')
     }
-    const snap = await getDocs(q)
-    setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() } as ReelNote)))
   }, [userId, reelId])
 
   useEffect(() => { fetch() }, [fetch])
@@ -41,5 +47,5 @@ export function useNotes(userId: string | undefined, reelId?: string) {
     await fetch()
   }, [userId, fetch])
 
-  return { notes, addNote, updateNote, deleteNote, refresh: fetch }
+  return { notes, error, addNote, updateNote, deleteNote, refresh: fetch }
 }

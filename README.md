@@ -1,32 +1,30 @@
-# React + TypeScript + Vite
+# Insta Reel Brain
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+AI-powered personal knowledge system for Instagram Reels. Search, organize, and rediscover everything you save.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Frontend:** React, TypeScript, Tailwind CSS, Vite
+- **Backend:** Firebase Auth + Firestore
+- **AI:** Groq API (LLM) + Apify (scraping)
+- **Deploy:** GitHub Pages + Firebase Cloud Functions
 
-## React Compiler
+## Setup
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. **Frontend** — `npm install && npm run dev`
+2. **Cloud Function** — `cd functions && npm install`
+3. **Deploy Cloud Function** — `npx firebase deploy --only functions`
+4. **Deploy Frontend** — push to `main` (auto-deploys via GitHub Actions)
 
-## Expanding the Oxlint configuration
+API keys are stored per-user in Firestore via the Settings page. No `.env` files needed.
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Architecture
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```
+Browser (GitHub Pages)
+  ├── Groq API (direct — supports CORS)
+  └── Firebase Cloud Function (proxy)
+        └── Apify API (scraping)
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+The Cloud Function exists solely because Apify's API blocks browser CORS requests. It's a stateless proxy — no keys stored server-side.

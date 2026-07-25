@@ -1,8 +1,8 @@
 import type { DataSourceRecord } from '../types'
 import { withRetry } from '../utils/retry'
 
+const PROXY_URL = 'https://us-central1-insta-reel-brain.cloudfunctions.net/apifyProxy'
 const ACTOR_ID = 'apify/instagram-reel-scraper'
-const APIFY_API = 'https://api.apify.com/v2'
 
 export interface ApifyResult {
   title: string
@@ -21,42 +21,40 @@ async function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms))
 }
 
-async function apifyPost(token: string, endpoint: string, payload: object): Promise<unknown> {
-  const url = `${APIFY_API}/${endpoint}${endpoint.includes('?') ? '&' : '?'}token=${token}`
-  const res = await fetch(url, {
+async function proxyCall(
+  token: string,
+  endpoint: string,
+  method: string,
+  payload?: object,
+): Promise<unknown> {
+  const res = await fetch(PROXY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ apifyApiKey: token, endpoint, method, payload }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.error?.message || `Apify error: ${res.status}`)
-  }
-  return res.json()
-}
-
-async function apifyGet(url: string): Promise<unknown> {
-  const res = await fetch(url)
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.error?.message || `Apify error: ${res.status}`)
+    throw new Error(err.error || `Apify error: ${res.status}`)
   }
   return res.json()
 }
 
 async function pollRun(runUrl: string, token: string, maxWaitSec = 120): Promise<string> {
   const deadline = Date.now() + maxWaitSec * 1000
+  // runUrl is a full Apify URL like https://api.apify.com/v2/actor-runs/xxx
+  // Extract the relative path from it
+  const relativePath = runUrl.replace('https://api.apify.com/v2/', '')
 
   while (Date.now() < deadline) {
     try {
-      const data = await apifyGet(`${runUrl}?token=${token}`) as Record<string, unknown>
+      const data = await proxyCall(token, relativePath, 'GET') as Record<string, unknown>
       const status = (data.data as Record<string, unknown>)?.status
       if (status === 'SUCCEEDED') return (data.data as Record<string, unknown>).defaultDatasetId as string
       if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
         throw new Error(`Apify run ${String(status).toLowerCase()}`)
       }
     } catch (e) {
-      if (e instanceof Error && e.message?.includes('run ')) throw e
+      if (e instanceof Error && (e.message?.includes('Apify run') || e.message?.includes('Apify error'))) throw e
     }
     await sleep(3000)
   }
@@ -70,23 +68,20 @@ export async function fetchViaApify(
   const sources: DataSourceRecord[] = []
   const token = apifyApiKey.trim()
 
-  // Start actor run directly
   const runData = await withRetry(() =>
-    apifyPost(token, `acts/${ACTOR_ID}/runs`, {
+    proxyCall(token, `acts/${ACTOR_ID}/runs`, 'POST', {
       directUrls: [reelUrl],
       addTranscription: true,
       proxyConfiguration: { useApifyProxy: true },
     })
   , { maxRetries: 2 }) as Record<string, unknown>
 
-  // Poll until done
   const runUrl = (runData.data as Record<string, unknown>)?.defaultRunUrl as string
   if (!runUrl) throw new Error('No run URL returned from Apify')
 
   const datasetId = await pollRun(runUrl, token)
 
-  // Fetch results
-  const dsData = await apifyPost(token, `datasets/${datasetId}/items?format=json`, {}) as unknown
+  const dsData = await proxyCall(token, `datasets/${datasetId}/items?format=json`, 'POST') as unknown
 
   if (!dsData || !Array.isArray(dsData) || dsData.length === 0) return { result: null, sources }
 

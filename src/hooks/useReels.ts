@@ -11,13 +11,20 @@ const getUserReels = (uid: string) => collection(db, 'users', uid, 'reels')
 export function useReels(userId: string | undefined) {
   const [reels, setReels] = useState<Reel[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const fetch = useCallback(async () => {
     if (!userId) { setReels([]); setLoading(false); return }
     setLoading(true)
-    const snap = await getDocs(query(getUserReels(userId), orderBy('createdAt', 'desc')))
-    setReels(snap.docs.map(d => ({ id: d.id, ...d.data() } as Reel)))
-    setLoading(false)
+    try {
+      const snap = await getDocs(query(getUserReels(userId), orderBy('createdAt', 'desc')))
+      setReels(snap.docs.map(d => ({ id: d.id, ...d.data() } as Reel)))
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load reels')
+    } finally {
+      setLoading(false)
+    }
   }, [userId])
 
   useEffect(() => { fetch() }, [fetch])
@@ -47,5 +54,5 @@ export function useReels(userId: string | undefined) {
     return snap.exists() ? ({ id: snap.id, ...snap.data() } as Reel) : null
   }, [userId])
 
-  return { reels, loading, addReel, updateReel, deleteReel, getReel, refresh: fetch }
+  return { reels, loading, error, addReel, updateReel, deleteReel, getReel, refresh: fetch }
 }

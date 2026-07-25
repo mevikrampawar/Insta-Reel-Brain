@@ -4,6 +4,7 @@
 interface Bucket {
   tokens: number
   lastRefill: number
+  lastCall: number
 }
 
 const buckets = new Map<string, Bucket>()
@@ -17,7 +18,7 @@ export function rateLimit(
   let bucket = buckets.get(key)
 
   if (!bucket) {
-    bucket = { tokens: maxPerMinute, lastRefill: now }
+    bucket = { tokens: maxPerMinute, lastRefill: now, lastCall: 0 }
     buckets.set(key, bucket)
   }
 
@@ -28,14 +29,15 @@ export function rateLimit(
   bucket.tokens = Math.min(maxPerMinute, bucket.tokens + refillAmount)
   bucket.lastRefill = now
 
-  // Check minimum interval since last call
-  const lastCall = bucket.lastRefill
-  if (now - lastCall < minIntervalMs) {
-    return { allowed: false, waitMs: minIntervalMs - (now - lastCall) }
+  // Check minimum interval since last *allowed* call
+  const sinceLastCall = now - bucket.lastCall
+  if (sinceLastCall < minIntervalMs) {
+    return { allowed: false, waitMs: minIntervalMs - sinceLastCall }
   }
 
   if (bucket.tokens >= 1) {
     bucket.tokens -= 1
+    bucket.lastCall = now
     return { allowed: true, waitMs: 0 }
   }
 

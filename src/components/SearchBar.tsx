@@ -20,7 +20,6 @@ export function SearchBar({ reels, onResults }: Props) {
       if (mode === 'keyword') {
         onResults(keywordSearch(reels, query))
       } else {
-        // Semantic search uses TF-IDF — no API key needed
         onResults(combinedSearch(reels, query))
       }
     } catch {

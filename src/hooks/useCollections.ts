@@ -8,13 +8,20 @@ const getUserCollections = (uid: string) => collection(db, 'users', uid, 'collec
 export function useCollections(userId: string | undefined) {
   const [collections, setCollections] = useState<Collection[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const fetch = useCallback(async () => {
     if (!userId) { setCollections([]); setLoading(false); return }
     setLoading(true)
-    const snap = await getDocs(query(getUserCollections(userId), orderBy('createdAt', 'desc')))
-    setCollections(snap.docs.map(d => ({ id: d.id, ...d.data() } as Collection)))
-    setLoading(false)
+    try {
+      const snap = await getDocs(query(getUserCollections(userId), orderBy('createdAt', 'desc')))
+      setCollections(snap.docs.map(d => ({ id: d.id, ...d.data() } as Collection)))
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load collections')
+    } finally {
+      setLoading(false)
+    }
   }, [userId])
 
   useEffect(() => { fetch() }, [fetch])
@@ -43,5 +50,5 @@ export function useCollections(userId: string | undefined) {
     await fetch()
   }, [userId, fetch])
 
-  return { collections, loading, addCollection, deleteCollection, addReelToCollection, removeReelFromCollection, refresh: fetch }
+  return { collections, loading, error, addCollection, deleteCollection, addReelToCollection, removeReelFromCollection, refresh: fetch }
 }
