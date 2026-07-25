@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from './hooks/useAuth'
 import { useReels } from './hooks/useReels'
 import { useCollections } from './hooks/useCollections'
+import { useScrapeQueue } from './hooks/useScrapeQueue'
 import { ApiKeyProvider, useApiKey } from './hooks/useApiKey'
 import { Login } from './components/Login'
 import { Layout } from './components/Layout'
@@ -17,6 +18,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel } = useReels(user.uid)
   const { collections, addCollection, deleteCollection, addReelToCollection } = useCollections(user.uid)
   const { apiKey, apifyApiKey } = useApiKey()
+  const { jobs, addJob, removeJob } = useScrapeQueue(apifyApiKey, apiKey, addReel, updateReel)
   const [tab, setTab] = useState('library')
 
   return (
@@ -31,11 +33,12 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
       )}
       {tab === 'ingest' && (
         <IngestionForm
-          addReel={addReel}
-          updateReel={updateReel}
-          onDone={() => setTab('library')}
+          jobs={jobs}
+          addJob={addJob}
+          removeJob={removeJob}
           apiKey={apiKey}
           apifyApiKey={apifyApiKey}
+          onSwitchToLibrary={() => setTab('library')}
         />
       )}
       {tab === 'chat' && <Chat reels={reels} apiKey={apiKey} />}

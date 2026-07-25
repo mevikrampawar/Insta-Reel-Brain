@@ -19,7 +19,7 @@ export interface Reel {
   language: string
   thumbnailUrl: string
   source: 'manual' | 'upload' | 'telegram' | 'ios-shortcut'
-  ingestStatus: 'queued' | 'transcribing' | 'analyzing' | 'embedding' | 'complete' | 'failed'
+  ingestStatus: 'queued' | 'scraping' | 'transcribing' | 'analyzing' | 'embedding' | 'complete' | 'failed'
   errorMessage: string
   transcript: string
   summary: string

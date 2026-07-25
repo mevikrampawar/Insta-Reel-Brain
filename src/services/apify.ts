@@ -17,10 +17,6 @@ export interface ApifyResult {
   transcript: string
 }
 
-async function sleep(ms: number) {
-  return new Promise(r => setTimeout(r, ms))
-}
-
 async function apifyFetch(
   token: string,
   endpoint: string,
@@ -39,31 +35,10 @@ async function apifyFetch(
   return res.json()
 }
 
-async function pollRun(runUrl: string, token: string, maxWaitSec = 120): Promise<string> {
-  const deadline = Date.now() + maxWaitSec * 1000
-  const relativePath = runUrl.replace(`${APIFY_BASE}/`, '')
-
-  while (Date.now() < deadline) {
-    try {
-      const data = await apifyFetch(token, relativePath, 'GET') as Record<string, unknown>
-      const status = (data.data as Record<string, unknown>)?.status
-      if (status === 'SUCCEEDED') return (data.data as Record<string, unknown>).defaultDatasetId as string
-      if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-        throw new Error(`Apify run ${String(status).toLowerCase()}`)
-      }
-    } catch (e) {
-      if (e instanceof Error && (e.message?.includes('Apify run') || e.message?.includes('Apify error'))) throw e
-    }
-    await sleep(3000)
-  }
-  throw new Error('Apify timed out (2 min)')
-}
-
-export async function fetchViaApify(
+export async function startApifyRun(
   apifyApiKey: string,
   reelUrl: string,
-): Promise<{ result: ApifyResult | null; sources: DataSourceRecord[] }> {
-  const sources: DataSourceRecord[] = []
+): Promise<{ runUrl: string }> {
   const token = apifyApiKey.trim()
 
   const runData = await withRetry(() =>
@@ -76,7 +51,31 @@ export async function fetchViaApify(
   const runUrl = (runData.data as Record<string, unknown>)?.defaultRunUrl as string
   if (!runUrl) throw new Error('No run URL returned from Apify')
 
-  const datasetId = await pollRun(runUrl, token)
+  return { runUrl }
+}
+
+export type ApifyRunStatus = 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'ABORTED' | 'TIMED-OUT'
+
+export async function pollApifyRun(
+  runUrl: string,
+  token: string,
+): Promise<{ status: ApifyRunStatus; datasetId?: string }> {
+  const relativePath = runUrl.replace(`${APIFY_BASE}/`, '')
+  const data = await apifyFetch(token, relativePath, 'GET') as Record<string, unknown>
+  const run = data.data as Record<string, unknown>
+  const status = run?.status as ApifyRunStatus
+  if (status === 'SUCCEEDED') {
+    return { status, datasetId: run.defaultDatasetId as string }
+  }
+  return { status }
+}
+
+export async function fetchApifyDataset(
+  apifyApiKey: string,
+  datasetId: string,
+): Promise<{ result: ApifyResult | null; sources: DataSourceRecord[] }> {
+  const sources: DataSourceRecord[] = []
+  const token = apifyApiKey.trim()
 
   const dsData = await apifyFetch(token, `datasets/${datasetId}/items?format=json`, 'GET') as unknown
 
