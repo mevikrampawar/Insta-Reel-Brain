@@ -402,6 +402,13 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
               ))}
             </div>
           )}
+          {/* Actionable fix steps */}
+          <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-400 space-y-1">
+            <p className="font-medium">How to fix:</p>
+            {!hasWorker && <p>• Add an Apify key in <strong>Settings</strong> — this is the most reliable source</p>}
+            {hasWorker && <p>• Your Cloudflare Worker may need redeployment — open your Worker in Cloudflare Dashboard, paste the code from <code>worker/instagram-proxy.js</code>, and Deploy</p>}
+            {!hasApify && <p>• Add an Apify key in <strong>Settings</strong> for metadata + transcripts</p>}
+          </div>
         </div>
       )}
 
