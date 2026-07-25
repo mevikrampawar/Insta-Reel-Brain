@@ -17,7 +17,7 @@ function Dashboard() {
   const { user, logout } = useAuth()
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel } = useReels(user?.uid)
   const { collections, addCollection, deleteCollection } = useCollections(user?.uid)
-  const { apiKey, workerUrl, apifyApiKey } = useApiKey()
+  const { apiKey, apifyApiKey } = useApiKey()
   const [tab, setTab] = useState('library')
 
   if (!user) return null
@@ -39,7 +39,6 @@ function Dashboard() {
           updateReel={updateReel}
           onDone={() => setTab('library')}
           apiKey={apiKey}
-          workerUrl={workerUrl}
           apifyApiKey={apifyApiKey}
         />
       )}
@@ -49,7 +48,7 @@ function Dashboard() {
         <Collections collections={collections} reels={reels} onAdd={addCollection} onDelete={deleteCollection} />
       )}
       {tab === 'datasources' && (
-        <DataSources reels={reels} workerUrl={workerUrl} apifyApiKey={apifyApiKey} groqApiKey={apiKey} />
+        <DataSources reels={reels} apifyApiKey={apifyApiKey} groqApiKey={apiKey} />
       )}
       {tab === 'settings' && <Settings userId={user.uid} />}
     </Layout>

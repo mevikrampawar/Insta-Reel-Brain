@@ -20,49 +20,32 @@ async function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms))
 }
 
-async function proxyFetch(workerUrl: string, endpoint: string, method: string, payload?: object): Promise<any> {
-  const base = workerUrl.trim().startsWith('http') ? workerUrl.trim() : `https://${workerUrl.trim()}`
-  const res = await fetch(`${base}?action=apify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint, method, payload }),
-  })
-  if (!res.ok) throw new Error(`Worker proxy failed: ${res.status}`)
-  return res.json()
-}
-
-async function corsProxyFetch(url: string, method: string, body?: string): Promise<any> {
-  const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(url)}`
-  const res = await fetch(proxyUrl, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body,
-  })
-  if (!res.ok) throw new Error(`CORS proxy failed: ${res.status}`)
-  return res.json()
-}
-
-async function apifyRequest(workerUrl: string | undefined, endpoint: string, method: string, payload?: object): Promise<any> {
-  // Try worker first if configured
-  if (workerUrl) {
-    try {
-      return await proxyFetch(workerUrl, endpoint, method, payload)
-    } catch {
-      // Worker failed, fall through to CORS proxy
-    }
+async function apifyFetch(url: string, options?: RequestInit): Promise<any> {
+  // Try direct first (works if Apify sends CORS headers)
+  try {
+    const res = await fetch(url, options)
+    if (res.ok) return res.json()
+  } catch {
+    // CORS blocked, try proxy
   }
+
   // Fallback to CORS proxy
-  const url = `${APIFY_BASE}/${endpoint}`
-  return corsProxyFetch(url, method, payload ? JSON.stringify(payload) : undefined)
+  const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(url)}`
+  const res = await fetch(proxyUrl, options)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error?.message || `Apify request failed: ${res.status}`)
+  }
+  return res.json()
 }
 
-async function pollRun(workerUrl: string | undefined, runUrl: string, apifyToken: string, maxWaitSec = 90): Promise<string> {
+async function pollRun(runUrl: string, apifyToken: string, maxWaitSec = 90): Promise<string> {
   const deadline = Date.now() + maxWaitSec * 1000
   const endpoint = runUrl.replace('https://api.apify.com/v2/', '')
 
   while (Date.now() < deadline) {
     try {
-      const data = await apifyRequest(workerUrl, `${endpoint}?token=${apifyToken}`, 'GET')
+      const data = await apifyFetch(`${APIFY_BASE}/${endpoint}?token=${apifyToken}`)
       const status = data.data?.status
       if (status === 'SUCCEEDED') return data.data.defaultDatasetId
       if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
@@ -73,34 +56,36 @@ async function pollRun(workerUrl: string | undefined, runUrl: string, apifyToken
     }
     await sleep(2000)
   }
-  throw new Error('Apify run timed out (90s)')
+  throw new Error('Apify timed out (90s)')
 }
 
 export async function fetchViaApify(
-  workerUrl: string | undefined,
   apifyApiKey: string,
   url: string,
 ): Promise<{ result: ApifyResult | null; sources: DataSourceRecord[] }> {
   const sources: DataSourceRecord[] = []
 
   try {
-    const runData = await apifyRequest(
-      workerUrl,
-      `acts/${ACTOR_ID}/runs?token=${apifyApiKey}`,
-      'POST',
+    // Start actor run
+    const runData = await apifyFetch(
+      `${APIFY_BASE}/acts/${ACTOR_ID}/runs?token=${apifyApiKey}`,
       {
-        directUrls: [url],
-        addTranscription: true,
-        proxyConfiguration: { useApifyProxy: true },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          directUrls: [url],
+          addTranscription: true,
+          proxyConfiguration: { useApifyProxy: true },
+        }),
       },
     )
 
-    const datasetId = await pollRun(workerUrl, runData.data.defaultRunUrl, apifyApiKey)
+    // Poll until done
+    const datasetId = await pollRun(runData.data.defaultRunUrl, apifyApiKey)
 
-    const dsData = await apifyRequest(
-      workerUrl,
-      `datasets/${datasetId}/items?token=${apifyApiKey}&format=json`,
-      'GET',
+    // Fetch results
+    const dsData = await apifyFetch(
+      `${APIFY_BASE}/datasets/${datasetId}/items?token=${apifyApiKey}&format=json`,
     )
 
     if (!dsData || !Array.isArray(dsData) || dsData.length === 0) return { result: null, sources }

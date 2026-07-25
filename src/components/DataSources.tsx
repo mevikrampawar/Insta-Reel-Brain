@@ -1,15 +1,14 @@
 import { useMemo } from 'react'
-import { Globe, Bot, Zap, TrendingUp } from 'lucide-react'
+import { Bot, Zap, TrendingUp } from 'lucide-react'
 import type { Reel } from '../types'
 
 interface Props {
   reels: Reel[]
-  workerUrl: string
   apifyApiKey: string
   groqApiKey: string
 }
 
-export function DataSources({ reels, workerUrl, apifyApiKey, groqApiKey }: Props) {
+export function DataSources({ reels, apifyApiKey, groqApiKey }: Props) {
   const completeReels = useMemo(() => reels.filter(r => r.ingestStatus === 'complete'), [reels])
 
   const stats = useMemo(() => {
@@ -38,9 +37,6 @@ export function DataSources({ reels, workerUrl, apifyApiKey, groqApiKey }: Props
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
         <h3 className="text-sm font-medium text-zinc-300 mb-3">Configured</h3>
         <div className="flex items-center gap-3 text-xs flex-wrap">
-          <span className={`flex items-center gap-1.5 px-2 py-1 rounded-lg ${workerUrl ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-500 border border-zinc-700'}`}>
-            <Globe size={10} /> GraphQL Worker {workerUrl ? '✓' : '—'}
-          </span>
           <span className={`flex items-center gap-1.5 px-2 py-1 rounded-lg ${apifyApiKey ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-500 border border-zinc-700'}`}>
             <Bot size={10} /> Apify {apifyApiKey ? '✓' : '—'}
           </span>
@@ -85,8 +81,8 @@ export function DataSources({ reels, workerUrl, apifyApiKey, groqApiKey }: Props
                     <p className="text-sm text-zinc-200 truncate">{reel.title || 'Untitled'}</p>
                     <p className="text-xs text-zinc-500">
                       {reelSources.map(s => (
-                        <span key={s.source} className={`inline-flex items-center gap-1 mr-2 ${s.source === 'apify' ? 'text-orange-400' : 'text-cyan-400'}`}>
-                          {s.source === 'apify' ? <Bot size={10} /> : <Globe size={10} />}
+                        <span key={s.source} className={`inline-flex items-center gap-1 mr-2 ${s.source === 'apify' ? 'text-orange-400' : 'text-indigo-400'}`}>
+                          <Bot size={10} />
                           {s.source} ({s.fields.length})
                         </span>
                       ))}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Settings as SettingsIcon, Save, Check, AlertCircle, ExternalLink, Trash2, Globe, Bot, Zap, Loader2, XCircle } from 'lucide-react'
+import { Settings as SettingsIcon, Save, Check, AlertCircle, ExternalLink, Trash2, Bot, Zap, Loader2, XCircle } from 'lucide-react'
 import { db } from '../services/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 
@@ -9,7 +9,6 @@ interface Props {
 
 interface UserSettings {
   groqApiKey: string
-  workerUrl: string
   apifyApiKey: string
   updatedAt: number
 }
@@ -27,7 +26,6 @@ const emptyField: FieldState = { local: '', cloud: '', saving: false, savedFlash
 
 export function Settings({ userId }: Props) {
   const [groq, setGroq] = useState<FieldState>(emptyField)
-  const [worker, setWorker] = useState<FieldState>(emptyField)
   const [apify, setApify] = useState<FieldState>(emptyField)
   const [loading, setLoading] = useState(true)
   const [showGroq, setShowGroq] = useState(false)
@@ -42,10 +40,8 @@ export function Settings({ userId }: Props) {
       if (snap.exists() && mounted.current) {
         const d = snap.data() as UserSettings
         const g = d.groqApiKey || ''
-        const w = d.workerUrl || ''
         const a = d.apifyApiKey || ''
         setGroq({ local: g, cloud: g, saving: false, savedFlash: false, testing: false, testResult: null })
-        setWorker({ local: w, cloud: w, saving: false, savedFlash: false, testing: false, testResult: null })
         setApify({ local: a, cloud: a, saving: false, savedFlash: false, testing: false, testResult: null })
       }
       setLoading(false)
@@ -53,15 +49,15 @@ export function Settings({ userId }: Props) {
     load()
   }, [userId])
 
-  const saveField = useCallback(async (field: 'groq' | 'worker' | 'apify') => {
-    const state = field === 'groq' ? groq : field === 'worker' ? worker : apify
-    const setter = field === 'groq' ? setGroq : field === 'worker' ? setWorker : setApify
-    const firestoreKey = field === 'groq' ? 'groqApiKey' : field === 'worker' ? 'workerUrl' : 'apifyApiKey'
+  const saveField = useCallback(async (field: 'groq' | 'apify') => {
+    const state = field === 'groq' ? groq : apify
+    const setter = field === 'groq' ? setGroq : setApify
+    const firestoreKey = field === 'groq' ? 'groqApiKey' : 'apifyApiKey'
 
     setter(s => ({ ...s, saving: true }))
 
     const snap = await getDoc(doc(db, 'users', userId, 'settings', 'preferences'))
-    const existing = snap.exists() ? (snap.data() as UserSettings) : { groqApiKey: '', workerUrl: '', apifyApiKey: '' }
+    const existing = snap.exists() ? (snap.data() as UserSettings) : { groqApiKey: '', apifyApiKey: '' }
 
     await setDoc(doc(db, 'users', userId, 'settings', 'preferences'), {
       ...existing,
@@ -72,16 +68,16 @@ export function Settings({ userId }: Props) {
     const val = state.local.trim()
     setter({ local: val, cloud: val, saving: false, savedFlash: true, testing: false, testResult: null })
     setTimeout(() => setter(s => ({ ...s, savedFlash: false })), 2000)
-  }, [groq, worker, apify, userId])
+  }, [groq, apify, userId])
 
-  const clearField = useCallback(async (field: 'groq' | 'worker' | 'apify') => {
-    const setter = field === 'groq' ? setGroq : field === 'worker' ? setWorker : setApify
-    const firestoreKey = field === 'groq' ? 'groqApiKey' : field === 'worker' ? 'workerUrl' : 'apifyApiKey'
+  const clearField = useCallback(async (field: 'groq' | 'apify') => {
+    const setter = field === 'groq' ? setGroq : setApify
+    const firestoreKey = field === 'groq' ? 'groqApiKey' : 'apifyApiKey'
 
     setter(s => ({ ...s, local: '', saving: true }))
 
     const snap = await getDoc(doc(db, 'users', userId, 'settings', 'preferences'))
-    const existing = snap.exists() ? (snap.data() as UserSettings) : { groqApiKey: '', workerUrl: '', apifyApiKey: '' }
+    const existing = snap.exists() ? (snap.data() as UserSettings) : { groqApiKey: '', apifyApiKey: '' }
 
     await setDoc(doc(db, 'users', userId, 'settings', 'preferences'), {
       ...existing,
@@ -119,19 +115,6 @@ export function Settings({ userId }: Props) {
     setTimeout(() => setApify(s => ({ ...s, testResult: null })), 4000)
   }, [apify.local])
 
-  const testWorker = useCallback(async () => {
-    if (!worker.local.trim()) return
-    setWorker(s => ({ ...s, testing: true, testResult: null }))
-    try {
-      const url = worker.local.trim().startsWith('http') ? worker.local.trim() : `https://${worker.local.trim()}`
-      const res = await fetch(url, { method: 'GET', mode: 'no-cors' })
-      setWorker(s => ({ ...s, testing: false, testResult: res.ok || res.type === 'opaque' ? 'ok' : 'fail' }))
-    } catch {
-      setWorker(s => ({ ...s, testing: false, testResult: 'fail' }))
-    }
-    setTimeout(() => setWorker(s => ({ ...s, testResult: null })), 4000)
-  }, [worker.local])
-
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center">
@@ -148,15 +131,35 @@ export function Settings({ userId }: Props) {
         </div>
         <div>
           <h2 className="text-2xl font-bold">Settings</h2>
-          <p className="text-sm text-zinc-500">Configure API keys and data sources</p>
+          <p className="text-sm text-zinc-500">Configure API keys</p>
         </div>
       </div>
+
+      {/* Apify */}
+      <KeyCard
+        icon={<Bot size={16} className="text-orange-400" />}
+        title="Apify API Key"
+        badge={{ text: 'Required', cls: 'bg-orange-500/10 text-orange-400' }}
+        description="Fetches reel metadata, captions, hashtags, and transcripts. $5 free credit = ~3,300 reels. No credit card."
+        linkHref="https://console.apify.com"
+        linkLabel="Get free API key"
+        linkHint="→ Sign up → Settings → API Token"
+        linkCls="text-orange-400 hover:text-orange-300"
+        state={apify}
+        showKey={showApify}
+        onToggleShow={() => setShowApify(v => !v)}
+        placeholder="apify_api_..."
+        onChange={v => setApify(s => ({ ...s, local: v, testResult: null }))}
+        onSave={() => saveField('apify')}
+        onClear={() => clearField('apify')}
+        onTest={testApify}
+      />
 
       {/* Groq */}
       <KeyCard
         icon={<Zap size={16} className="text-indigo-400" />}
         title="Groq API Key"
-        badge={{ text: 'Free', cls: 'bg-emerald-500/10 text-emerald-400' }}
+        badge={{ text: 'Required', cls: 'bg-indigo-500/10 text-indigo-400' }}
         description="AI analysis, search embeddings, and chat. Stored securely in your Firestore account only."
         linkHref="https://console.groq.com"
         linkLabel="Get free API key"
@@ -170,37 +173,6 @@ export function Settings({ userId }: Props) {
         onSave={() => saveField('groq')}
         onClear={() => clearField('groq')}
         onTest={testGroq}
-      />
-
-      {/* Apify */}
-      <KeyCard
-        icon={<Bot size={16} className="text-orange-400" />}
-        title="Apify API Key"
-        badge={{ text: '$5 free credit', cls: 'bg-orange-500/10 text-orange-400' }}
-        description="Fetches reel transcripts, hashtags, captions. $5 free credit = ~3,300 reels. No credit card."
-        linkHref="https://console.apify.com"
-        linkLabel="Get free API key"
-        linkHint="→ Sign up → Settings → API Token"
-        linkCls="text-orange-400 hover:text-orange-300"
-        state={apify}
-        showKey={showApify}
-        onToggleShow={() => setShowApify(v => !v)}
-        placeholder="apify_api_..."
-        onChange={v => setApify(s => ({ ...s, local: v, testResult: null }))}
-        onSave={() => saveField('apify')}
-        onClear={() => clearField('apify')}
-        onTest={testApify}
-        optional
-        optionalHint="Without it, transcripts won't auto-fetch."
-      />
-
-      {/* Worker */}
-      <WorkerCard
-        state={worker}
-        onChange={v => setWorker(s => ({ ...s, local: v, testResult: null }))}
-        onSave={() => saveField('worker')}
-        onClear={() => clearField('worker')}
-        onTest={testWorker}
       />
 
       {/* Security */}
@@ -223,7 +195,6 @@ export function Settings({ userId }: Props) {
 function KeyCard({
   icon, title, badge, description, linkHref, linkLabel, linkHint, linkCls,
   state, showKey, onToggleShow, placeholder, onChange, onSave, onClear, onTest,
-  optional, optionalHint,
 }: {
   icon: React.ReactNode
   title: string
@@ -241,8 +212,6 @@ function KeyCard({
   onSave: () => void
   onClear: () => void
   onTest: () => void
-  optional?: boolean
-  optionalHint?: string
 }) {
   const unsaved = state.local.trim() !== state.cloud
   const hasValue = state.local.trim().length > 0
@@ -310,96 +279,6 @@ function KeyCard({
         {state.testResult === 'ok' && <span className="flex items-center gap-1 text-xs text-emerald-400"><Check size={12} /> Connected</span>}
         {state.testResult === 'fail' && <span className="flex items-center gap-1 text-xs text-red-400"><XCircle size={12} /> Failed</span>}
       </div>
-
-      {optional && optionalHint && !hasValue && (
-        <div className="flex items-start gap-2 text-xs text-zinc-500 bg-zinc-800/50 border border-zinc-800 rounded-lg p-3">
-          <AlertCircle size={12} className="shrink-0 mt-0.5" />
-          <span>{optionalHint}</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ── Worker Card ─────────────────────────────────────────── */
-
-function WorkerCard({ state, onChange, onSave, onClear, onTest }: {
-  state: FieldState
-  onChange: (v: string) => void
-  onSave: () => void
-  onClear: () => void
-  onTest: () => void
-}) {
-  const unsaved = state.local.trim() !== state.cloud
-  const hasValue = state.local.trim().length > 0
-
-  return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
-      <div className="flex items-center gap-2">
-        <Globe size={16} className="text-cyan-400" />
-        <h3 className="font-medium">Instagram Proxy (Cloudflare Worker)</h3>
-        <span className="text-xs px-2 py-0.5 bg-cyan-500/10 text-cyan-400 rounded">Optional</span>
-        {!state.saving && !state.savedFlash && hasValue && !unsaved && (
-          <span className="ml-auto flex items-center gap-1 text-xs text-emerald-400"><Check size={12} /> Saved</span>
-        )}
-        {state.savedFlash && (
-          <span className="ml-auto flex items-center gap-1 text-xs text-emerald-400"><Check size={12} /> Saved</span>
-        )}
-        {!state.savedFlash && unsaved && hasValue && (
-          <span className="ml-auto flex items-center gap-1 text-xs text-amber-400"><AlertCircle size={12} /> Unsaved</span>
-        )}
-      </div>
-
-      <p className="text-sm text-zinc-400">
-        Enables free GraphQL metadata fetch (creator, caption, hashtags, video URL).
-        Requires a free Cloudflare Worker — takes 2 minutes to set up.
-      </p>
-
-      <div className="flex items-center gap-2 text-xs text-zinc-500">
-        <a href="https://dash.cloudflare.com" target="_blank" rel="noopener"
-          className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 transition-colors">
-          Create free Cloudflare account <ExternalLink size={10} />
-        </a>
-        <span>→ Workers → Create → Paste worker code → Deploy</span>
-      </div>
-
-      <div className="flex gap-2">
-        <input
-          value={state.local}
-          onChange={e => onChange(e.target.value)}
-          placeholder="https://ig-proxy.YOUR_SUBDOMAIN.workers.dev"
-          className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors font-mono text-cyan-300"
-        />
-        {hasValue && (
-          <button onClick={onClear}
-            className="px-3 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-zinc-400 hover:text-red-400 transition-colors"
-            title="Clear">
-            <Trash2 size={14} />
-          </button>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2">
-        <button onClick={onSave} disabled={!unsaved || state.saving}
-          className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-medium transition-colors">
-          {state.saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-          {state.saving ? 'Saving...' : 'Save'}
-        </button>
-        <button onClick={onTest} disabled={!hasValue || state.testing}
-          className="flex items-center gap-1.5 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed border border-zinc-700 rounded-lg text-xs font-medium text-zinc-300 transition-colors">
-          {state.testing ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
-          {state.testing ? 'Testing...' : 'Test Connection'}
-        </button>
-        {state.testResult === 'ok' && <span className="flex items-center gap-1 text-xs text-emerald-400"><Check size={12} /> Reachable</span>}
-        {state.testResult === 'fail' && <span className="flex items-center gap-1 text-xs text-red-400"><XCircle size={12} /> Unreachable</span>}
-      </div>
-
-      {!hasValue && (
-        <div className="flex items-start gap-2 text-xs text-zinc-500 bg-zinc-800/50 border border-zinc-800 rounded-lg p-3">
-          <AlertCircle size={12} className="shrink-0 mt-0.5" />
-          <span>Optional. Without it, app falls back to public CORS proxies for metadata. Worker gives faster, more reliable results.</span>
-        </div>
-      )}
     </div>
   )
 }

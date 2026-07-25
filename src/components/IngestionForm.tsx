@@ -1,8 +1,8 @@
 import { useState, useCallback, useRef } from 'react'
-import { Link, Loader2, AlertCircle, Sparkles, CheckCircle2, Video, Globe, Bot, XCircle } from 'lucide-react'
+import { Link, Loader2, AlertCircle, Sparkles, CheckCircle2, Video, Bot } from 'lucide-react'
 import type { Reel, DataSourceRecord } from '../types'
 import { processReel } from '../services/ingestion'
-import { fetchInstagramMetadata, isInstagramUrl } from '../services/instagram'
+import { isInstagramUrl } from '../services/instagram'
 import { fetchViaApify } from '../services/apify'
 
 interface Props {
@@ -11,7 +11,6 @@ interface Props {
   updateReel: (id: string, data: Partial<Reel>) => Promise<void>
   onDone: () => void
   apiKey: string
-  workerUrl: string
   apifyApiKey: string
 }
 
@@ -30,20 +29,13 @@ interface FetchedData {
   transcript: string
 }
 
-interface FetchLog {
-  source: string
-  status: 'ok' | 'fail' | 'skip'
-  detail: string
-}
-
-export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, apifyApiKey }: Props) {
+export function IngestionForm({ addReel, updateReel, onDone, apiKey, apifyApiKey }: Props) {
   const [url, setUrl] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
   const [fetched, setFetched] = useState<FetchedData | null>(null)
   const [sources, setSources] = useState<DataSourceRecord[]>([])
   const [error, setError] = useState('')
   const [progress, setProgress] = useState('')
-  const [fetchLog, setFetchLog] = useState<FetchLog[]>([])
   const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentUrlRef = useRef('')
 
@@ -51,93 +43,52 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
     if (currentUrlRef.current === targetUrl) return
     currentUrlRef.current = targetUrl
     setError('')
-    setFetchLog([])
-
-    let title = '', creatorHandle = '', caption = '', hashtags: string[] = []
-    let thumbnailUrl = '', videoUrl = '', likeCount = 0, commentCount = 0, duration = 0, transcript = ''
-    const allSources: DataSourceRecord[] = []
-    const log: FetchLog[] = []
 
     setPhase('fetching')
-    setProgress('Fetching reel data...')
+    setProgress('Fetching reel data from Apify...')
 
-    // ── 1. Try Apify first (most reliable) ──
+    let result: FetchedData | null = null
+    let fetchSources: DataSourceRecord[] = []
+
     if (apifyApiKey) {
-      log.push({ source: 'Apify', status: 'ok', detail: 'Starting...' })
-      setFetchLog([...log])
       try {
-        const { result, sources: apifySources } = await fetchViaApify(workerUrl || undefined, apifyApiKey, targetUrl)
-        if (result) {
-          creatorHandle = result.creatorHandle
-          caption = result.caption
-          hashtags = result.hashtags
-          thumbnailUrl = result.thumbnailUrl
-          videoUrl = result.videoUrl
-          likeCount = result.likeCount
-          commentCount = result.commentCount
-          duration = result.duration
-          transcript = result.transcript
-          title = result.title
-          allSources.push(...apifySources)
-          log[log.length - 1] = { source: 'Apify', status: 'ok', detail: `Got ${apifySources[0]?.fields.length || 0} fields` }
-        } else {
-          log[log.length - 1] = { source: 'Apify', status: 'fail', detail: 'No data returned' }
+        const { result: apifyResult, sources: apifySources } = await fetchViaApify(apifyApiKey, targetUrl)
+        if (apifyResult) {
+          result = {
+            title: apifyResult.title,
+            creatorHandle: apifyResult.creatorHandle,
+            caption: apifyResult.caption,
+            hashtags: apifyResult.hashtags,
+            thumbnailUrl: apifyResult.thumbnailUrl,
+            videoUrl: apifyResult.videoUrl,
+            likeCount: apifyResult.likeCount,
+            commentCount: apifyResult.commentCount,
+            duration: apifyResult.duration,
+            transcript: apifyResult.transcript,
+          }
+          fetchSources = apifySources
         }
       } catch (e) {
-        log[log.length - 1] = { source: 'Apify', status: 'fail', detail: e instanceof Error ? e.message : 'Failed' }
+        setError(e instanceof Error ? e.message : 'Apify request failed')
       }
-      setFetchLog([...log])
+    }
+
+    if (result) {
+      setFetched(result)
+      setSources(fetchSources)
+      setPhase('ready')
+    } else if (!error) {
+      setPhase('error')
+      setError(!apifyApiKey
+        ? 'No Apify key configured. Go to Settings and add your Apify API key.'
+        : 'Could not fetch reel data. Check your Apify key in Settings.'
+      )
     } else {
-      log.push({ source: 'Apify', status: 'skip', detail: 'Not configured' })
-      setFetchLog([...log])
+      setPhase('error')
     }
 
-    // ── 2. Try Instagram GraphQL to supplement ──
-    const needsMore = !creatorHandle || !thumbnailUrl || hashtags.length === 0
-    if (needsMore) {
-      log.push({ source: 'GraphQL', status: 'ok', detail: 'Starting...' })
-      setFetchLog([...log])
-      try {
-        const { metadata, sources: gqlSources } = await fetchInstagramMetadata(targetUrl, workerUrl || undefined)
-        if (metadata) {
-          if (!creatorHandle && metadata.creatorHandle) creatorHandle = metadata.creatorHandle
-          if (!caption && metadata.caption) caption = metadata.caption
-          if (metadata.hashtags.length > 0 && hashtags.length === 0) hashtags = metadata.hashtags
-          if (!thumbnailUrl && metadata.thumbnailUrl) thumbnailUrl = metadata.thumbnailUrl
-          if (!videoUrl && metadata.videoUrl) videoUrl = metadata.videoUrl
-          if (!likeCount && metadata.likeCount) likeCount = metadata.likeCount
-          if (!commentCount && metadata.commentCount) commentCount = metadata.commentCount
-          if (!duration && metadata.duration) duration = metadata.duration
-          allSources.push(...gqlSources)
-          log[log.length - 1] = { source: 'GraphQL', status: 'ok', detail: `Got ${gqlSources[0]?.fields.length || 0} fields` }
-        } else {
-          log[log.length - 1] = { source: 'GraphQL', status: 'fail', detail: 'Instagram blocked the request' }
-        }
-      } catch (e) {
-        log[log.length - 1] = { source: 'GraphQL', status: 'fail', detail: e instanceof Error ? e.message : 'Failed' }
-      }
-      setFetchLog([...log])
-    } else {
-      log.push({ source: 'GraphQL', status: 'skip', detail: 'Already have data from Apify' })
-      setFetchLog([...log])
-    }
-
-    // ── 3. Build result ──
-    if (!title) {
-      title = caption ? caption.split('\n')[0]?.slice(0, 120) || '' : `Reel by @${creatorHandle || 'unknown'}`
-    }
-
-    const data: FetchedData = {
-      title, creatorHandle, caption, hashtags, thumbnailUrl, videoUrl,
-      likeCount, commentCount, duration, transcript,
-    }
-
-    setFetched(data)
-    setSources(allSources)
-    setPhase(allSources.length > 0 ? 'ready' : 'error')
-    if (allSources.length === 0) setError('Could not fetch reel data. Check your API keys in Settings.')
     currentUrlRef.current = ''
-  }, [workerUrl, apifyApiKey])
+  }, [apifyApiKey, error])
 
   const handleUrlChange = (newUrl: string) => {
     setUrl(newUrl)
@@ -145,7 +96,6 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
     setFetched(null)
     setSources([])
     setError('')
-    setFetchLog([])
     currentUrlRef.current = ''
 
     if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current)
@@ -218,7 +168,6 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
     }
   }
 
-  const hasWorker = !!workerUrl.trim()
   const hasApify = !!apifyApiKey.trim()
 
   return (
@@ -235,19 +184,16 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
 
       {/* Config status */}
       <div className="flex items-center gap-3 text-xs">
-        <span className={`flex items-center gap-1 ${hasWorker ? 'text-emerald-400' : 'text-zinc-500'}`}>
-          {hasWorker ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
-          Worker {hasWorker ? '✓' : '(not set)'}
-        </span>
-        <span className={`flex items-center gap-1 ${hasApify ? 'text-emerald-400' : 'text-zinc-500'}`}>
+        <span className={`flex items-center gap-1 ${hasApify ? 'text-emerald-400' : 'text-amber-400'}`}>
           {hasApify ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
           Apify {hasApify ? '✓' : '(not set)'}
         </span>
       </div>
 
-      {!hasWorker && !hasApify && (
+      {!hasApify && (
         <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-400">
-          No data sources configured. Go to <strong>Settings</strong> to add Apify and/or Cloudflare Worker.
+          Go to <strong>Settings</strong> and add your Apify API key to fetch reel data.
+          Free at <a href="https://console.apify.com" target="_blank" rel="noopener" className="underline">console.apify.com</a> ($5 free credit).
         </div>
       )}
 
@@ -267,26 +213,9 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
 
       {/* Fetching status */}
       {phase === 'fetching' && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm text-indigo-400 bg-indigo-500/5 border border-indigo-500/20 rounded-lg p-3">
-            <Loader2 size={14} className="animate-spin" />
-            <span>{progress}</span>
-          </div>
-          {fetchLog.length > 0 && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 space-y-1.5">
-              {fetchLog.map((entry, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  {entry.status === 'ok' && <CheckCircle2 size={10} className="text-emerald-400 shrink-0" />}
-                  {entry.status === 'fail' && <XCircle size={10} className="text-red-400 shrink-0" />}
-                  {entry.status === 'skip' && <AlertCircle size={10} className="text-zinc-500 shrink-0" />}
-                  <span className={`font-medium ${entry.status === 'ok' ? 'text-emerald-400' : entry.status === 'fail' ? 'text-red-400' : 'text-zinc-500'}`}>
-                    {entry.source}
-                  </span>
-                  <span className="text-zinc-500">{entry.detail}</span>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="flex items-center gap-2 text-sm text-orange-400 bg-orange-500/5 border border-orange-500/20 rounded-lg p-3">
+          <Loader2 size={14} className="animate-spin" />
+          <span>{progress}</span>
         </div>
       )}
 
@@ -297,16 +226,12 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
           {sources.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {sources.map((s, i) => (
-                <div key={i} className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${
-                  s.cost === 'free'
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
-                }`}>
-                  {s.source === 'graphql' ? <Globe size={10} /> : <Bot size={10} />}
+                <div key={i} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                  <Bot size={10} />
                   <span className="font-medium">{s.source}</span>
                   <span className="text-zinc-500">·</span>
                   <span>{s.fields.length} fields</span>
-                  {s.cost === 'free' ? <span className="text-emerald-600">FREE</span> : <span className="text-orange-600">PAID</span>}
+                  <span className="text-orange-600">PAID</span>
                 </div>
               ))}
             </div>
@@ -387,28 +312,14 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, workerUrl, 
           <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 rounded-lg p-3">
             <AlertCircle size={16} /> {error}
           </div>
-          {fetchLog.length > 0 && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 space-y-1.5">
-              {fetchLog.map((entry, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  {entry.status === 'ok' && <CheckCircle2 size={10} className="text-emerald-400 shrink-0" />}
-                  {entry.status === 'fail' && <XCircle size={10} className="text-red-400 shrink-0" />}
-                  {entry.status === 'skip' && <AlertCircle size={10} className="text-zinc-500 shrink-0" />}
-                  <span className={`font-medium ${entry.status === 'ok' ? 'text-emerald-400' : entry.status === 'fail' ? 'text-red-400' : 'text-zinc-500'}`}>
-                    {entry.source}
-                  </span>
-                  <span className="text-zinc-500">{entry.detail}</span>
-                </div>
-              ))}
+          {!hasApify && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-xs text-zinc-400 space-y-1">
+              <p className="font-medium text-zinc-300">Setup:</p>
+              <p>1. Go to <a href="https://console.apify.com" target="_blank" rel="noopener" className="text-indigo-400 underline">console.apify.com</a> → Sign up (free $5 credit)</p>
+              <p>2. Settings → API Token → Copy</p>
+              <p>3. Paste in <strong>Settings</strong> page here → Save</p>
             </div>
           )}
-          {/* Actionable fix steps */}
-          <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-400 space-y-1">
-            <p className="font-medium">How to fix:</p>
-            {!hasWorker && <p>• Add an Apify key in <strong>Settings</strong> — this is the most reliable source</p>}
-            {hasWorker && <p>• Your Cloudflare Worker may need redeployment — open your Worker in Cloudflare Dashboard, paste the code from <code>worker/instagram-proxy.js</code>, and Deploy</p>}
-            {!hasApify && <p>• Add an Apify key in <strong>Settings</strong> for metadata + transcripts</p>}
-          </div>
         </div>
       )}
 
