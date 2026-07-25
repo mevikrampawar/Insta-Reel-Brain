@@ -2,7 +2,7 @@ import type { DataSourceRecord } from '../types'
 import { withRetry } from '../utils/retry'
 
 const APIFY_BASE = 'https://api.apify.com/v2'
-const ACTOR_ID = 'apify/instagram-reel-scraper'
+const ACTOR_ID = 'apify~instagram-reel-scraper'
 
 export interface ApifyResult {
   title: string
@@ -67,7 +67,7 @@ export async function fetchViaApify(
   const token = apifyApiKey.trim()
 
   const runData = await withRetry(() =>
-    apifyFetch(token, `acts/${ACTOR_ID}/runs`, 'POST', {
+    apifyFetch(token, `actors/${ACTOR_ID}/runs`, 'POST', {
       directUrls: [reelUrl],
       addTranscription: true,
       proxyConfiguration: { useApifyProxy: true },
