@@ -1,8 +1,8 @@
 import type { DataSourceRecord } from '../types'
 import { withRetry } from '../utils/retry'
 
-// After deploying to Vercel, replace with your Vercel URL (e.g. https://insta-reel-brain.vercel.app)
-const PROXY_URL = 'https://insta-reel-brain.vercel.app/api/proxy'
+const CORS_PROXY = 'https://corsproxy.io/?url='
+const APIFY_BASE = 'https://api.apify.com/v2'
 const ACTOR_ID = 'apify/instagram-reel-scraper'
 
 export interface ApifyResult {
@@ -22,16 +22,18 @@ async function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms))
 }
 
-async function proxyCall(
+async function apifyFetch(
   token: string,
   endpoint: string,
-  method: string,
+  method: string = 'GET',
   payload?: object,
 ): Promise<unknown> {
-  const res = await fetch(PROXY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ apifyApiKey: token, endpoint, method, payload }),
+  const targetUrl = `${APIFY_BASE}/${endpoint}`
+  const proxyUrl = `${CORS_PROXY}${encodeURIComponent(targetUrl)}`
+  const res = await fetch(proxyUrl, {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+    ...(payload ? { body: JSON.stringify(payload) } : {}),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -42,11 +44,11 @@ async function proxyCall(
 
 async function pollRun(runUrl: string, token: string, maxWaitSec = 120): Promise<string> {
   const deadline = Date.now() + maxWaitSec * 1000
-  const relativePath = runUrl.replace('https://api.apify.com/v2/', '')
+  const relativePath = runUrl.replace(`${APIFY_BASE}/`, '')
 
   while (Date.now() < deadline) {
     try {
-      const data = await proxyCall(token, relativePath, 'GET') as Record<string, unknown>
+      const data = await apifyFetch(token, relativePath, 'GET') as Record<string, unknown>
       const status = (data.data as Record<string, unknown>)?.status
       if (status === 'SUCCEEDED') return (data.data as Record<string, unknown>).defaultDatasetId as string
       if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
@@ -68,7 +70,7 @@ export async function fetchViaApify(
   const token = apifyApiKey.trim()
 
   const runData = await withRetry(() =>
-    proxyCall(token, `acts/${ACTOR_ID}/runs`, 'POST', {
+    apifyFetch(token, `acts/${ACTOR_ID}/runs`, 'POST', {
       directUrls: [reelUrl],
       addTranscription: true,
       proxyConfiguration: { useApifyProxy: true },
@@ -80,7 +82,7 @@ export async function fetchViaApify(
 
   const datasetId = await pollRun(runUrl, token)
 
-  const dsData = await proxyCall(token, `datasets/${datasetId}/items?format=json`, 'POST') as unknown
+  const dsData = await apifyFetch(token, `datasets/${datasetId}/items?format=json`, 'GET') as unknown
 
   if (!dsData || !Array.isArray(dsData) || dsData.length === 0) return { result: null, sources }
 
