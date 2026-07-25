@@ -11,11 +11,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  const body = JSON.parse(Buffer.concat(chunks).toString());
-
-  const { apifyApiKey, endpoint, method = 'POST', payload } = body;
+  const { apifyApiKey, endpoint, method = 'POST', payload } = req.body;
 
   if (!apifyApiKey || !endpoint) {
     return res.status(400).json({ error: 'Missing apifyApiKey or endpoint' });
