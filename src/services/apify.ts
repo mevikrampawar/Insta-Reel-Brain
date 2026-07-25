@@ -38,7 +38,7 @@ async function apifyFetch(
 export async function startApifyRun(
   apifyApiKey: string,
   reelUrl: string,
-): Promise<{ runUrl: string }> {
+): Promise<{ runId: string; datasetId: string }> {
   const token = apifyApiKey.trim()
 
   const runData = await withRetry(() =>
@@ -48,20 +48,22 @@ export async function startApifyRun(
     })
   , { maxRetries: 2 }) as Record<string, unknown>
 
-  const runUrl = (runData.data as Record<string, unknown>)?.defaultRunUrl as string
-  if (!runUrl) throw new Error('No run URL returned from Apify')
+  const run = runData.data as Record<string, unknown>
+  const runId = run?.id as string
+  const datasetId = run?.defaultDatasetId as string
+  if (!runId) throw new Error('No run ID returned from Apify')
 
-  return { runUrl }
+  return { runId, datasetId }
 }
 
 export type ApifyRunStatus = 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'ABORTED' | 'TIMED-OUT'
 
 export async function pollApifyRun(
-  runUrl: string,
-  token: string,
+  apifyApiKey: string,
+  runId: string,
 ): Promise<{ status: ApifyRunStatus; datasetId?: string }> {
-  const relativePath = runUrl.replace(`${APIFY_BASE}/`, '')
-  const data = await apifyFetch(token, relativePath, 'GET') as Record<string, unknown>
+  const token = apifyApiKey.trim()
+  const data = await apifyFetch(token, `actor-runs/${runId}`, 'GET') as Record<string, unknown>
   const run = data.data as Record<string, unknown>
   const status = run?.status as ApifyRunStatus
   if (status === 'SUCCEEDED') {

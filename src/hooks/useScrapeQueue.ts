@@ -12,7 +12,7 @@ export interface ScrapeJob {
   error?: string
   result?: ApifyResult
   sources?: DataSourceRecord[]
-  runUrl?: string
+  runId?: string
   datasetId?: string
 }
 
@@ -39,20 +39,16 @@ export function useScrapeQueue(
     setJobs(prev => prev.filter(j => j.id !== id))
   }, [])
 
-  // Main polling loop — runs independently per job
   const pollOnce = useCallback(async (job: ScrapeJob): Promise<boolean> => {
-    const token = apifyApiKey.trim()
-    const { status, datasetId } = await pollApifyRun(job.runUrl!, token)
+    const { status, datasetId } = await pollApifyRun(apifyApiKey, job.runId!)
 
     if (status === 'SUCCEEDED' && datasetId) {
-      // Fetch scraped data
       const { result, sources } = await fetchApifyDataset(apifyApiKey, datasetId)
       if (!result) {
         patch(job.id, { phase: 'failed', error: 'Apify returned no data' })
         return true
       }
 
-      // Create reel in Firestore
       const reelId = await addReel({
         url: job.url,
         title: result.title || 'Untitled Reel',
@@ -70,7 +66,6 @@ export function useScrapeQueue(
 
       patch(job.id, { phase: 'analyzing', result, sources, datasetId })
 
-      // Run AI analysis
       await processReel(groqApiKey, {
         url: job.url,
         transcript: result.transcript || result.caption || '',
@@ -87,20 +82,18 @@ export function useScrapeQueue(
     }
 
     if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-      patch(job.id, { phase: 'failed', error: `Apify run ${status.toLowerCase()}` })
+      patch(job.id, { phase: 'failed', error: `Apify run ${String(status).toLowerCase()}` })
       return true
     }
 
-    return false // still running, poll again
+    return false
   }, [apifyApiKey, groqApiKey, addReel, updateReel, patch, remove])
 
-  // When jobs change, kick off polling for any scraping jobs that have a runUrl
   useEffect(() => {
     for (const job of jobs) {
-      if (job.phase !== 'scraping' || !job.runUrl || polling.current.has(job.id)) continue
+      if (job.phase !== 'scraping' || !job.runId || polling.current.has(job.id)) continue
 
       polling.current.add(job.id)
-
       ;(async () => {
         const deadline = Date.now() + TIMEOUT_MS
         try {
@@ -130,8 +123,8 @@ export function useScrapeQueue(
     setJobs(prev => [...prev, { id, url, phase: 'queued' }])
 
     try {
-      const { runUrl } = await startApifyRun(apifyApiKey, url)
-      setJobs(prev => prev.map(j => j.id === id ? { ...j, phase: 'scraping' as const, runUrl } : j))
+      const { runId } = await startApifyRun(apifyApiKey, url)
+      setJobs(prev => prev.map(j => j.id === id ? { ...j, phase: 'scraping' as const, runId } : j))
     } catch (e) {
       setJobs(prev => prev.map(j => j.id === id ? { ...j, phase: 'failed' as const, error: e instanceof Error ? e.message : 'Failed to start' } : j))
     }
