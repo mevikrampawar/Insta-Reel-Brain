@@ -89,7 +89,11 @@ export function Settings({ userId }: Props) {
     if (!apify.local.trim()) return
     setApify(s => ({ ...s, testing: true, testResult: null }))
     try {
-      const r = await fetch('https://api.apify.com/v2/users/me', { headers: { Authorization: `Bearer ${apify.local.trim()}` } })
+      const r = await fetch('https://YOUR_VERCEL_URL.vercel.app/api/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apifyApiKey: apify.local.trim(), endpoint: 'users/me', method: 'GET' }),
+      })
       setApify(s => ({ ...s, testing: false, testResult: r.ok ? 'ok' : 'fail' }))
     } catch { setApify(s => ({ ...s, testing: false, testResult: 'fail' })) }
     setTimeout(() => setApify(s => ({ ...s, testResult: null })), 4000)
