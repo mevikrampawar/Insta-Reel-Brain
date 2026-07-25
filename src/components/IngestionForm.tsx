@@ -10,7 +10,6 @@ interface Props {
   updateReel: (id: string, data: Partial<Reel>) => Promise<void>
   onDone: () => void
   apiKey: string
-  backendUrl: string
   apifyApiKey: string
 }
 
@@ -22,7 +21,7 @@ interface FetchedData {
   duration: number; transcript: string
 }
 
-export function IngestionForm({ addReel, updateReel, onDone, apiKey, backendUrl, apifyApiKey }: Props) {
+export function IngestionForm({ addReel, updateReel, onDone, apiKey, apifyApiKey }: Props) {
   const [url, setUrl] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
   const [fetched, setFetched] = useState<FetchedData | null>(null)
@@ -44,13 +43,6 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, backendUrl,
       return
     }
 
-    if (!backendUrl.trim()) {
-      setPhase('error')
-      setError('Add your Backend URL in Settings first.')
-      currentUrlRef.current = ''
-      return
-    }
-
     setPhase('fetching')
     setProgress('Fetching reel data from Apify...')
 
@@ -58,7 +50,6 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, backendUrl,
       const { result, sources: fetchSources } = await fetchViaApify(
         apifyApiKey.trim(),
         targetUrl,
-        backendUrl.trim(),
       )
 
       if (result) {
@@ -81,7 +72,7 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, backendUrl,
     }
 
     currentUrlRef.current = ''
-  }, [backendUrl, apifyApiKey])
+  }, [apifyApiKey])
 
   const handleUrlChange = (newUrl: string) => {
     setUrl(newUrl)
@@ -120,7 +111,7 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, backendUrl,
         caption: fetched.caption, hashtags: fetched.hashtags, thumbnailUrl: fetched.thumbnailUrl,
         dataSources: [
           ...sources,
-          { source: 'groq' as const, fields: ['summary', 'keyTakeaways', 'suggestedTags', 'concepts', 'embeddings'], cost: 'free' as const, timestamp: Date.now() },
+          { source: 'groq' as const, fields: ['summary', 'keyTakeaways', 'suggestedTags', 'concepts'], cost: 'free' as const, timestamp: Date.now() },
         ],
       })
       if (!id) throw new Error('Failed to create reel')
@@ -140,7 +131,6 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, backendUrl,
   }
 
   const hasApify = !!apifyApiKey.trim()
-  const hasBackend = !!backendUrl.trim()
 
   return (
     <div className="max-w-2xl mx-auto p-8 space-y-6">
@@ -153,20 +143,11 @@ export function IngestionForm({ addReel, updateReel, onDone, apiKey, backendUrl,
         <span className={`flex items-center gap-1 ${hasApify ? 'text-emerald-400' : 'text-amber-400'}`}>
           {hasApify ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />} Apify {hasApify ? '✓' : '(not set)'}
         </span>
-        <span className={`flex items-center gap-1 ${hasBackend ? 'text-emerald-400' : 'text-amber-400'}`}>
-          {hasBackend ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />} Backend {hasBackend ? '✓' : '(not set)'}
-        </span>
       </div>
 
       {!hasApify && (
         <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-400">
           Go to <strong>Settings</strong> → add your Apify API key. Free at <a href="https://console.apify.com" target="_blank" rel="noopener" className="underline">console.apify.com</a>
-        </div>
-      )}
-
-      {!hasBackend && (
-        <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-400">
-          Go to <strong>Settings</strong> → add your Backend URL (deployed from <code>server/</code> folder)
         </div>
       )}
 

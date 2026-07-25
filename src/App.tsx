@@ -17,7 +17,7 @@ function Dashboard() {
   const { user, logout } = useAuth()
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel } = useReels(user?.uid)
   const { collections, addCollection, deleteCollection, addReelToCollection } = useCollections(user?.uid)
-  const { apiKey, backendUrl, apifyApiKey } = useApiKey()
+  const { apiKey, apifyApiKey } = useApiKey()
   const [tab, setTab] = useState('library')
 
   if (!user) return null
@@ -38,7 +38,6 @@ function Dashboard() {
           updateReel={updateReel}
           onDone={() => setTab('library')}
           apiKey={apiKey}
-          backendUrl={backendUrl}
           apifyApiKey={apifyApiKey}
         />
       )}
