@@ -2,7 +2,7 @@ import type { DataSourceRecord } from '../types'
 import { withRetry } from '../utils/retry'
 
 // After deploying to Vercel, replace with your Vercel URL (e.g. https://insta-reel-brain.vercel.app)
-const PROXY_URL = 'https://YOUR_VERCEL_URL.vercel.app/api/proxy'
+const PROXY_URL = 'https://insta-reel-brain.vercel.app/api/proxy'
 const ACTOR_ID = 'apify/instagram-reel-scraper'
 
 export interface ApifyResult {
