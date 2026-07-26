@@ -236,7 +236,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
         />
       )}
       {nav.tab === 'chat' && <Chat reels={reels} apiKey={apiKey} onReelClick={navigateToReel} />}
-      {nav.tab === 'graph' && <NeuralGraph reels={reels} collections={collections} onReelClick={navigateToReel} />}
+      {nav.tab === 'graph' && <NeuralGraph reels={reels} onReelClick={navigateToReel} />}
       {nav.tab === 'collections' && (
         <Collections
           collections={collections}

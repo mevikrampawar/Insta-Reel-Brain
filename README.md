@@ -2,6 +2,23 @@
 
 AI-powered personal knowledge system for Instagram Reels. Paste a URL — AI handles everything: scraping, transcription, analysis, tagging, and semantic search.
 
+**Live site:** [mevikrampawar.github.io/Insta-Reel-Brain](https://mevikrampawar.github.io/Insta-Reel-Brain/)
+
+## Features
+
+- **Paste & forget** — paste a URL, AI handles scraping, transcription, analysis, and tagging
+- **Non-blocking ingestion** — add multiple URLs while previous ones process in parallel
+- **Semantic search** — TF-IDF with keyword fallback, runs entirely in-browser, no API calls
+- **3D Knowledge Graph** — hierarchical category tree with Reel Brain root node, radial layout, 3D text labels
+- **Chat with Library** — ask questions in natural language, get answers citing your saved reels
+- **Smart Collections** — AI auto-organizes reels into categories + manual groups
+- **Deep AI Analysis** — summaries, key takeaways, entities, concepts, quality scores
+- **Notes** — per-reel annotations
+- **Data Sources** — see where each field came from and cost breakdown
+- **Export** — download your library as CSV or JSON
+- **PWA** — installable on mobile and desktop, works offline for cached data
+- **Auto-ingest** — iOS Shortcuts and Android share sheet integration
+
 ## Architecture
 
 100% client-side. No server, no proxy, no backend. Runs entirely in the browser on GitHub Pages.
@@ -10,10 +27,10 @@ AI-powered personal knowledge system for Instagram Reels. Paste a URL — AI han
 Browser → Apify API (scrape) → Groq API (analyze) → Firestore (store) → TF-IDF search
 ```
 
-- **Apify** — scrapes reel data (captions, hashtags, creator, transcript) directly from the browser. $5 free credit (~3,300 reels).
-- **Groq** — powers AI analysis, semantic search, and chat. Free tier (30 req/min).
-- **Firebase** — Google Sign-In + Firestore for per-user data storage.
-- **TF-IDF** — in-browser text similarity search. No embeddings API needed.
+- **Apify** — scrapes reel data (captions, hashtags, creator, transcript) directly from the browser
+- **Groq** — powers AI analysis, hierarchy classification, semantic search, and chat
+- **Firebase** — Google Sign-In + Firestore for per-user data storage
+- **TF-IDF** — in-browser text similarity search. No embeddings API needed
 
 ## Stack
 
@@ -25,7 +42,8 @@ Browser → Apify API (scrape) → Groq API (analyze) → Firestore (store) → 
 | Database | Cloud Firestore |
 | AI (LLM) | Groq API (llama-3.3-70b-versatile) |
 | Scraping | Apify API (instagram-reel-scraper actor) |
-| Search | TF-IDF (in-browser, no API) |
+| Search | TF-IDF (in-browser) |
+| 3D Graph | react-force-graph-3d, Three.js |
 | Deploy | GitHub Pages (via GitHub Actions) |
 
 ## Setup
@@ -42,24 +60,87 @@ Open `http://localhost:5173`, sign in with Google, then add your API keys in **S
 
 API keys are stored per-user in Firestore. No `.env` files needed.
 
+## Auto-Ingest URLs
+
+You don't have to manually paste URLs. Set up automatic ingestion from your phone.
+
+### iOS Shortcut
+
+1. Open the **Shortcuts** app on your iPhone
+2. Tap **+** to create a new Shortcut
+3. Add action: **Receive input from Share Sheet** → select "URLs"
+4. Add action: **URL** → enter:
+   ```
+   https://mevikrampawar.github.io/Insta-Reel-Brain/?url=[clipboard]
+   ```
+5. Add action: **Open URLs**
+6. Name the shortcut **"Add to Reel Brain"**
+7. Done! From Instagram: tap **Share** → scroll to **"Add to Reel Brain"**
+
+### Android / Desktop (PWA Share Target)
+
+1. Open [mevikrampawar.github.io/Insta-Reel-Brain](https://mevikrampawar.github.io/Insta-Reel-Brain/) in Chrome
+2. Install as PWA: Chrome menu → **Install app** (or bell icon in address bar)
+3. From Instagram app: tap **Share** → **Reel Brain** appears in the share sheet
+4. From desktop: right-click a reel → **Share** → pick Reel Brain
+
+### Deep Links
+
+The app supports deep links via URL parameter:
+
+```
+https://mevikrampawar.github.io/Insta-Reel-Brain/?url=https://www.instagram.com/reel/ABC123/
+```
+
+When opened, the app auto-navigates to the ingest tab and adds the URL to the queue.
+
 ## How It Works
 
-1. **Add Reel** — paste an Instagram Reel URL
-2. **Apify scrapes** — captions, hashtags, creator handle, thumbnail, transcript (direct browser → Apify, no proxy)
-3. **Groq analyzes** — generates summary, key takeaways, suggested tags, and concepts
-4. **Search** — TF-IDF semantic search runs entirely in-browser
-5. **Chat** — ask questions about your reel library, Groq answers using relevant context
+1. **Add Reel** — paste a URL, use an iOS Shortcut, or share via PWA
+2. **Apify scrapes** — captions, hashtags, creator handle, thumbnail, transcript
+3. **Groq analyzes** — generates summary, key takeaways, suggested tags, entities, and concepts
+4. **Groq classifies** — assigns a hierarchical category path (e.g., AI & Technology → Coding → React)
+5. **Search** — TF-IDF semantic search runs entirely in-browser
+6. **Chat** — ask questions about your reel library, Groq answers using relevant context
 
-## Features
+## 3D Knowledge Graph
 
-- **Non-blocking ingestion** — add multiple URLs while previous ones process
-- **Semantic search** — TF-IDF with keyword fallback, no API calls
-- **Knowledge Graph** — concept-concept relationships via co-occurrence
-- **Chat with Library** — ask questions, get answers citing your reels
-- **Collections** — organize reels into custom groups
-- **Notes** — per-reel annotations
-- **Data Sources** — see where each field came from and cost breakdown
-- **Export** — download your library as CSV or JSON
+The graph visualizes your reel library as a hierarchical tree:
+
+- **Root node** — "Reel Brain" at the center (glowing icosahedron)
+- **Category nodes** — major categories (AI & Technology, Fitness, etc.) branch out with 3D text labels
+- **Sub-category nodes** — AI-generated sub-categories (Coding, Weight Training, etc.)
+- **Reel nodes** — individual reels connected to their leaf category
+
+Features:
+- Radial layout with strong force separation for readability
+- Category nodes sized by reel count
+- Click any node to navigate to that reel
+- **Recalibrate** button resets camera to default view after zooming/panning
+
+## Project Structure
+
+```
+src/
+  components/      # 13 UI components
+  hooks/           # 6 custom hooks (auth, reels, collections, notes, scrape queue, API keys)
+  services/        # 4 service modules (apify, groq, ingestion, firebase)
+  utils/           # 8 utilities (constants, export, format, quality, rateLimit, retry, search, tfidf)
+  types/           # TypeScript interfaces
+public/
+  manifest.json    # PWA manifest with share target
+  sw.js            # Service worker for PWA
+```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Build for production |
+| `npm run lint` | Run oxlint |
+| `npm run typecheck` | Run TypeScript type checking |
+| `npm run preview` | Preview production build |
 
 ## Deploy
 
@@ -69,23 +150,13 @@ Push to `main` → GitHub Actions builds and deploys to GitHub Pages automatical
 git push origin main
 ```
 
-Live site: `https://mevikrampawar.github.io/Insta-Reel-Brain/`
-
-## Project Structure
-
-```
-src/
-  components/     # 12 UI components
-  hooks/          # 6 custom hooks (auth, reels, collections, notes, scrape queue, API keys)
-  services/       # 4 service modules (apify, groq, ingestion, firebase)
-  utils/          # 5 utilities (tfidf, search, rateLimit, retry, export)
-  types/          # TypeScript interfaces
-```
-
 ## Cost
 
-$0. All services have free tiers:
-- **Apify**: $5 free credit on signup (~3,300 reels at $1/1,000)
-- **Groq**: 30 req/min free tier
-- **Firebase**: Spark plan (free)
-- **GitHub Pages**: Free for public repos
+$0 to start. All services have free tiers:
+
+| Service | Free Tier |
+|---------|-----------|
+| **Apify** | $5 credit on signup (~3,300 reels) |
+| **Groq** | 30 req/min, no credit card |
+| **Firebase** | Spark plan (1 GB storage, 10 GB bandwidth) |
+| **GitHub Pages** | Free for public repos |

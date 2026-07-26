@@ -20,7 +20,8 @@
     "react-dom": "^19.2.7",
     "react-force-graph-3d": "^1.29.1",
     "react-tiny-sparkline": "^1.1.1",
-    "tailwindcss": "^4.3.3"
+    "tailwindcss": "^4.3.3",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",

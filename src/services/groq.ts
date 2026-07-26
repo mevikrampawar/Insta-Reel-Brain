@@ -1,5 +1,6 @@
 import { rateLimit } from '../utils/rateLimit'
 import { withRetry } from '../utils/retry'
+import { MAJOR_CATEGORIES } from '../utils/constants'
 
 const BASE = 'https://api.groq.com/openai/v1'
 const RATE_LIMIT_KEY = 'groq-api'
@@ -164,19 +165,6 @@ export async function chatWithLibrary(
     },
   ], { temperature: 0.3, max_tokens: 2000 })
 }
-
-export const MAJOR_CATEGORIES = [
-  'AI & Technology',
-  'Fitness & Health',
-  'Business & Marketing',
-  'Programming & Development',
-  'Productivity & Self-improvement',
-  'Finance & Investing',
-  'Creative & Design',
-  'Education & Learning',
-  'Lifestyle & Entertainment',
-  'Food & Cooking',
-] as const
 
 export async function classifyReelCategory(
   apiKey: string,

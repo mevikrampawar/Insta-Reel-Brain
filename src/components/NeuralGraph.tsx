@@ -2,27 +2,10 @@ import { useMemo, useCallback, useRef, useEffect, useState } from 'react'
 import ForceGraph3D from 'react-force-graph-3d'
 import { Network, RotateCcw } from 'lucide-react'
 import * as THREE from 'three'
-import type { Reel, Collection } from '../types'
+import { CATEGORY_COLORS, getCategoryColor } from '../utils/constants'
+import type { Reel } from '../types'
 
-interface Props { reels: Reel[]; collections: Collection[]; onReelClick?: (reelId: string) => void }
-
-const CATEGORY_COLORS: Record<string, string> = {
-  'AI & Technology': '#8b5cf6',
-  'Fitness & Health': '#10b981',
-  'Business & Marketing': '#f59e0b',
-  'Programming & Development': '#3b82f6',
-  'Productivity & Self-improvement': '#ec4899',
-  'Finance & Investing': '#14b8a6',
-  'Creative & Design': '#f97316',
-  'Education & Learning': '#6366f1',
-  'Lifestyle & Entertainment': '#ef4444',
-  'Food & Cooking': '#84cc16',
-  'Other': '#6b7280',
-}
-
-function getCatColor(cat: string): string {
-  return CATEGORY_COLORS[cat] || CATEGORY_COLORS['Other']
-}
+interface Props { reels: Reel[]; onReelClick?: (reelId: string) => void }
 
 function makeTextSprite(text: string, opts: { fontSize?: number; color?: string; bgColor?: string; padding?: number } = {}): THREE.Sprite {
   const fontSize = opts.fontSize || 48
@@ -101,7 +84,7 @@ interface GraphLink {
   target: string
 }
 
-export function NeuralGraph({ reels, collections: _collections, onReelClick }: Props) {
+export function NeuralGraph({ reels, onReelClick }: Props) {
   const fgRef = useRef<any>(null)
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight })
   const completeReels = useMemo(() => reels.filter(r => r.ingestStatus === 'complete'), [reels])
@@ -137,7 +120,7 @@ export function NeuralGraph({ reels, collections: _collections, onReelClick }: P
       addedCategories.add(key)
 
       const depth = path.length
-      const baseColor = getCatColor(path[0])
+      const baseColor = getCategoryColor(path[0])
       const baseSize = depth === 1 ? 10 : depth === 2 ? 6 : 4
 
       graphNodes.push({
@@ -177,7 +160,7 @@ export function NeuralGraph({ reels, collections: _collections, onReelClick }: P
 
       // Create reel node
       const reelNodeId = `reel-${reel.id}`
-      const baseColor = getCatColor(path[0])
+      const baseColor = getCategoryColor(path[0])
       graphNodes.push({
         id: reelNodeId,
         name: reel.title || 'Untitled',
@@ -296,7 +279,7 @@ export function NeuralGraph({ reels, collections: _collections, onReelClick }: P
           if (node.type === 'category') {
             const cat = node.categoryPath?.[0] || 'Other'
             return `<div style="background:#18181b;color:#e4e4e7;padding:6px 10px;border-radius:6px;font-size:12px;max-width:220px;border:1px solid #27272a;">
-              <div style="font-weight:600;margin-bottom:2px;color:${getCatColor(cat)}">${node.name}</div>
+              <div style="font-weight:600;margin-bottom:2px;color:${getCategoryColor(cat)}">${node.name}</div>
               <div style="color:#a1a1aa;font-size:10px;">${node.categoryPath?.join(' → ') || ''}</div>
             </div>`
           }

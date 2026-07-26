@@ -1,22 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, orderBy, arrayUnion, arrayRemove } from 'firebase/firestore'
 import { db } from '../services/firebase'
+import { CATEGORY_COLORS } from '../utils/constants'
 import type { Collection } from '../types'
 
 const getUserCollections = (uid: string) => collection(db, 'users', uid, 'collections')
-
-const CATEGORY_COLORS: Record<string, string> = {
-  'AI & Technology': '#6366f1',
-  'Fitness & Health': '#10b981',
-  'Business & Marketing': '#f59e0b',
-  'Programming & Development': '#3b82f6',
-  'Productivity & Self-improvement': '#8b5cf6',
-  'Finance & Investing': '#14b8a6',
-  'Creative & Design': '#ec4899',
-  'Education & Learning': '#06b6d4',
-  'Lifestyle & Entertainment': '#f97316',
-  'Food & Cooking': '#ef4444',
-}
 
 export function useCollections(userId: string | undefined) {
   const [collections, setCollections] = useState<Collection[]>([])
