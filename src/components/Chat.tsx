@@ -120,7 +120,7 @@ export function Chat({ reels, apiKey }: Props) {
           <h2 className="font-bold">Chat with Library</h2>
           <span className="text-xs text-zinc-500">({completeReels.length} reels)</span>
           {messages.length > 0 && (
-            <button onClick={clearHistory} className="ml-auto p-1.5 text-zinc-500 hover:text-red-400 rounded-lg hover:bg-zinc-800 transition-colors" title="Clear history">
+            <button onClick={clearHistory} className="ml-auto p-1.5 text-zinc-500 hover:text-red-400 rounded-lg hover:bg-zinc-800 transition-colors" title="Clear history" aria-label="Clear chat history">
               <Trash2 size={14} />
             </button>
           )}
@@ -194,6 +194,7 @@ export function Chat({ reels, apiKey }: Props) {
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
             placeholder={apiKey ? "Ask about your Reels..." : "Add API key in Settings first..."}
             disabled={!apiKey}
+            aria-label="Chat message"
             className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-4 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500 transition-colors disabled:opacity-50"
           />
           <button onClick={() => handleSend()} disabled={loading || !input.trim() || !apiKey}

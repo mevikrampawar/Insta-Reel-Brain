@@ -84,14 +84,16 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
             onChange={e => setUrl(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSubmit()}
             placeholder="https://www.instagram.com/reel/..."
+            aria-label="Instagram Reel URL"
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-10 pr-4 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500 transition-colors"
           />
         </div>
-        <button
-          onClick={handleSubmit}
-          disabled={!url.trim() || !hasApify}
-          className="min-w-[48px] min-h-[48px] flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium text-sm transition-colors"
-        >
+          <button
+            onClick={handleSubmit}
+            disabled={!url.trim() || !hasApify}
+            aria-label="Submit URL"
+            className="min-w-[48px] min-h-[48px] flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium text-sm transition-colors"
+          >
           <ArrowRight size={16} />
         </button>
       </div>

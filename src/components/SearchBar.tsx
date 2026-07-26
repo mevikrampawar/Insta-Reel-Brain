@@ -50,6 +50,7 @@ export function SearchBar({ reels, onResults }: Props) {
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Search your reels..."
+            aria-label="Search reels"
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-10 pr-9 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500 transition-colors"
           />
           {query && (

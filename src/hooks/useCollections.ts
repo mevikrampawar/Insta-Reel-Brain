@@ -40,87 +40,130 @@ export function useCollections(userId: string | undefined) {
 
   const addCollection = useCallback(async (data: Partial<Collection>) => {
     if (!userId) return
-    await addDoc(getUserCollections(userId), {
-      ...data,
-      userId,
-      reelIds: data.reelIds || [],
-      isAuto: data.isAuto || false,
-      createdAt: Date.now(),
-    })
-    await fetch()
+    try {
+      await addDoc(getUserCollections(userId), {
+        ...data,
+        userId,
+        reelIds: data.reelIds || [],
+        isAuto: data.isAuto || false,
+        createdAt: Date.now(),
+      })
+      await fetch()
+    } catch (e) {
+      console.error('Failed to add collection:', e)
+      throw e
+    }
   }, [userId, fetch])
 
   const deleteCollection = useCallback(async (id: string, _keepReels?: boolean) => {
     if (!userId) return
-    await deleteDoc(doc(db, 'users', userId, 'collections', id))
-    await fetch()
+    try {
+      await deleteDoc(doc(db, 'users', userId, 'collections', id))
+      await fetch()
+    } catch (e) {
+      console.error('Failed to delete collection:', e)
+      throw e
+    }
   }, [userId, fetch])
 
   const renameCollection = useCallback(async (id: string, newName: string) => {
     if (!userId || !newName.trim()) return
-    await updateDoc(doc(db, 'users', userId, 'collections', id), { name: newName.trim() })
-    await fetch()
+    try {
+      await updateDoc(doc(db, 'users', userId, 'collections', id), { name: newName.trim() })
+      await fetch()
+    } catch (e) {
+      console.error('Failed to rename collection:', e)
+      throw e
+    }
   }, [userId, fetch])
 
   const addReelToCollection = useCallback(async (collectionId: string, reelId: string) => {
     if (!userId) return
-    await updateDoc(doc(db, 'users', userId, 'collections', collectionId), { reelIds: arrayUnion(reelId) })
-    await fetch()
+    try {
+      await updateDoc(doc(db, 'users', userId, 'collections', collectionId), { reelIds: arrayUnion(reelId) })
+      await fetch()
+    } catch (e) {
+      console.error('Failed to add reel to collection:', e)
+      throw e
+    }
   }, [userId, fetch])
 
   const removeReelFromCollection = useCallback(async (collectionId: string, reelId: string) => {
     if (!userId) return
-    await updateDoc(doc(db, 'users', userId, 'collections', collectionId), { reelIds: arrayRemove(reelId) })
-    await fetch()
+    try {
+      await updateDoc(doc(db, 'users', userId, 'collections', collectionId), { reelIds: arrayRemove(reelId) })
+      await fetch()
+    } catch (e) {
+      console.error('Failed to remove reel from collection:', e)
+      throw e
+    }
   }, [userId, fetch])
 
   const mergeCollections = useCallback(async (sourceId: string, targetId: string) => {
     if (!userId) return
-    const target = collections.find(c => c.id === targetId)
-    const source = collections.find(c => c.id === sourceId)
-    if (!target || !source) return
+    try {
+      const target = collections.find(c => c.id === targetId)
+      const source = collections.find(c => c.id === sourceId)
+      if (!target || !source) return
 
-    const mergedReelIds = [...new Set([...(target.reelIds || []), ...(source.reelIds || [])])]
-    await updateDoc(doc(db, 'users', userId, 'collections', targetId), { reelIds: mergedReelIds })
-    await deleteDoc(doc(db, 'users', userId, 'collections', sourceId))
-    await fetch()
+      const mergedReelIds = [...new Set([...(target.reelIds || []), ...(source.reelIds || [])])]
+      await updateDoc(doc(db, 'users', userId, 'collections', targetId), { reelIds: mergedReelIds })
+      await deleteDoc(doc(db, 'users', userId, 'collections', sourceId))
+      await fetch()
+    } catch (e) {
+      console.error('Failed to merge collections:', e)
+      throw e
+    }
   }, [userId, collections, fetch])
 
   const batchDeleteCollections = useCallback(async (ids: string[]) => {
     if (!userId || ids.length === 0) return
-    for (const id of ids) {
-      await deleteDoc(doc(db, 'users', userId, 'collections', id))
+    try {
+      await Promise.all(ids.map(id => deleteDoc(doc(db, 'users', userId, 'collections', id))))
+      await fetch()
+    } catch (e) {
+      console.error('Failed to batch delete collections:', e)
+      throw e
     }
-    await fetch()
   }, [userId, fetch])
 
   const batchMergeCollections = useCallback(async (sourceIds: string[], targetId: string) => {
     if (!userId || sourceIds.length === 0) return
-    const target = collections.find(c => c.id === targetId)
-    if (!target) return
+    try {
+      const target = collections.find(c => c.id === targetId)
+      if (!target) return
 
-    let allReelIds = [...(target.reelIds || [])]
-    for (const sourceId of sourceIds) {
-      if (sourceId === targetId) continue
-      const source = collections.find(c => c.id === sourceId)
-      if (source) {
-        allReelIds = [...allReelIds, ...(source.reelIds || [])]
-        await deleteDoc(doc(db, 'users', userId, 'collections', sourceId))
+      const deletePromises: Promise<void>[] = []
+      let allReelIds = [...(target.reelIds || [])]
+      for (const sourceId of sourceIds) {
+        if (sourceId === targetId) continue
+        const source = collections.find(c => c.id === sourceId)
+        if (source) {
+          allReelIds = [...allReelIds, ...(source.reelIds || [])]
+          deletePromises.push(deleteDoc(doc(db, 'users', userId, 'collections', sourceId)))
+        }
       }
+      await Promise.all(deletePromises)
+      const uniqueReelIds = [...new Set(allReelIds)]
+      await updateDoc(doc(db, 'users', userId, 'collections', targetId), { reelIds: uniqueReelIds })
+      await fetch()
+    } catch (e) {
+      console.error('Failed to batch merge collections:', e)
+      throw e
     }
-    const uniqueReelIds = [...new Set(allReelIds)]
-    await updateDoc(doc(db, 'users', userId, 'collections', targetId), { reelIds: uniqueReelIds })
-    await fetch()
   }, [userId, collections, fetch])
 
   const batchRemoveReels = useCallback(async (collectionIds: string[], reelIds: string[]) => {
     if (!userId) return
-    for (const cid of collectionIds) {
-      for (const rid of reelIds) {
-        await updateDoc(doc(db, 'users', userId, 'collections', cid), { reelIds: arrayRemove(rid) })
-      }
+    try {
+      await Promise.all(collectionIds.map(cid =>
+        updateDoc(doc(db, 'users', userId, 'collections', cid), { reelIds: arrayRemove(...reelIds) })
+      ))
+      await fetch()
+    } catch (e) {
+      console.error('Failed to batch remove reels:', e)
+      throw e
     }
-    await fetch()
   }, [userId, fetch])
 
   const assignReelsByCategory = useCallback(async (reels: { id: string; primaryCategory?: string }[]) => {

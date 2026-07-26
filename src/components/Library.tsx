@@ -55,14 +55,14 @@ const DATE_RANGES: { key: DateRange; label: string }[] = [
   { key: 'year', label: 'This Year' },
 ]
 
-function sortReels(reels: Reel[], sort: SortKey): Reel[] {
+function sortReels(reels: Reel[], sort: SortKey, qualityScores: Map<string, number>): Reel[] {
   const sorted = [...reels]
   switch (sort) {
     case 'newest': return sorted.sort((a, b) => (b.takenAt || b.createdAt) > (a.takenAt || a.createdAt) ? 1 : -1)
     case 'oldest': return sorted.sort((a, b) => (a.takenAt || a.createdAt) > (b.takenAt || b.createdAt) ? 1 : -1)
     case 'mostEngaged': return sorted.sort((a, b) => (b.likeCount + b.commentCount + b.playCount) - (a.likeCount + a.commentCount + a.playCount))
     case 'mostViewed': return sorted.sort((a, b) => (b.viewCount || b.playCount) - (a.viewCount || a.playCount))
-    case 'highestQuality': return sorted.sort((a, b) => computeQualityScore(b).overall - computeQualityScore(a).overall)
+    case 'highestQuality': return sorted.sort((a, b) => (qualityScores.get(b.id) ?? 0) - (qualityScores.get(a.id) ?? 0))
     case 'mostTalked': return sorted.sort((a, b) => b.commentCount - a.commentCount)
     default: return sorted
   }
@@ -97,6 +97,12 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([handle]) => handle)
   }, [reels])
 
+  const qualityScores = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const reel of reels) map.set(reel.id, computeQualityScore(reel).overall)
+    return map
+  }, [reels])
+
   const displayReels = useMemo(() => {
     const base = searchResults.length > 0 ? searchResults.map(r => r.reel) : reels
     let filtered = base
@@ -124,7 +130,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
 
     // Quality filter
     if (filters.qualityMin > 0) {
-      filtered = filtered.filter(r => computeQualityScore(r).overall >= filters.qualityMin)
+      filtered = filtered.filter(r => (qualityScores.get(r.id) ?? 0) >= filters.qualityMin)
     }
 
     // Creator filter
@@ -137,8 +143,8 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
       filtered = filtered.filter(r => dateInRange(r, filters.dateRange))
     }
 
-    return sortReels(filtered, sort)
-  }, [reels, searchResults, filters, sort, collections])
+    return sortReels(filtered, sort, qualityScores)
+  }, [reels, searchResults, filters, sort, collections, qualityScores])
 
   const stats = useMemo(() => ({
     total: reels.length,
