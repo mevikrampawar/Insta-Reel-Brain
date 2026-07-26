@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { ExternalLink, Tag, Clock, Trash2, ChevronDown, ChevronUp, AlertCircle, FolderPlus, StickyNote, Heart, MessageCircle, Play, Eye, Music, MapPin, Users, Shield } from 'lucide-react'
+import { ExternalLink, Tag, Clock, Trash2, ChevronDown, ChevronUp, AlertCircle, FolderPlus, StickyNote, Heart, MessageCircle, Play, Eye, Music, MapPin, Users, Shield, BookOpen, Package, Wrench, User, Globe, Smartphone, GraduationCap, Star } from 'lucide-react'
 import type { Reel, Collection } from '../types'
 import { useNotes } from '../hooks/useNotes'
 import { Notes } from './Notes'
+import { computeQualityScore, getQualityLabel, getQualityColor } from '../utils/quality'
 
 interface Props {
   reel: Reel
@@ -179,6 +180,24 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
               <Music size={10} className="shrink-0" /> <span className="truncate max-w-[100px]">{reel.audioTrack}</span>
             </span>
           )}
+          {/* Quality Score */}
+          {reel.ingestStatus === 'complete' && (
+            <span className={`flex items-center gap-1 text-[11px] ${getQualityColor(computeQualityScore(reel).overall)}`}>
+              <Star size={10} className="shrink-0" /> {getQualityLabel(computeQualityScore(reel).overall)}
+            </span>
+          )}
+          {/* Content Category */}
+          {reel.contentCategory && reel.contentCategory !== 'other' && (
+            <span className="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded text-[10px] capitalize">{reel.contentCategory}</span>
+          )}
+          {/* Sentiment */}
+          {reel.sentiment && reel.sentiment !== 'neutral' && (
+            <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+              reel.sentiment === 'positive' ? 'bg-emerald-500/10 text-emerald-400' :
+              reel.sentiment === 'negative' ? 'bg-red-500/10 text-red-400' :
+              'bg-yellow-500/10 text-yellow-400'
+            }`}>{reel.sentiment}</span>
+          )}
           {/* If no metrics at all, show date */}
           {reel.likeCount === 0 && reel.commentCount === 0 && reel.playCount === 0 && (
             <span className="flex items-center gap-1 text-[11px] text-zinc-600">
@@ -283,6 +302,55 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* Action Items */}
+          {reel.actionItems?.length > 0 && (
+            <div>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 font-medium">Action Items</p>
+              <ul className="space-y-1.5">
+                {reel.actionItems.map((item, i) => (
+                  <li key={i} className="text-xs text-zinc-300 flex gap-2">
+                    <span className="text-emerald-400 mt-0.5 shrink-0">✓</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Entities */}
+          {reel.entities?.length > 0 && (
+            <div>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 font-medium">Mentioned</p>
+              <div className="flex flex-wrap gap-1.5">
+                {reel.entities.map((entity, i) => {
+                  const icon = entity.type === 'book' ? BookOpen :
+                    entity.type === 'product' ? Package :
+                    entity.type === 'tool' ? Wrench :
+                    entity.type === 'person' ? User :
+                    entity.type === 'app' ? Smartphone :
+                    entity.type === 'course' ? GraduationCap :
+                    entity.type === 'website' ? Globe : Tag
+                  const Icon = icon
+                  return (
+                    <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-zinc-800 rounded-lg text-[11px] text-zinc-300">
+                      <Icon size={10} className="shrink-0 text-zinc-500" />
+                      {entity.name}
+                      <span className="text-[9px] text-zinc-600 capitalize">{entity.type}</span>
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Target Audience */}
+          {reel.targetAudience && (
+            <div>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 font-medium">Target Audience</p>
+              <p className="text-xs text-zinc-400">{reel.targetAudience}</p>
             </div>
           )}
 

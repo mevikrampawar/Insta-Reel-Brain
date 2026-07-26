@@ -30,7 +30,7 @@ function getInitialTab(): string {
 
 function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAuth>['user']>; logout: () => void }) {
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel } = useReels(user.uid)
-  const { collections, addCollection, deleteCollection, addReelToCollection, autoAssignCollections } = useCollections(user.uid)
+  const { collections, addCollection, deleteCollection, addReelToCollection, autoAssignCollections, retroactiveAutoAssign } = useCollections(user.uid)
   const { apiKey, apifyApiKey } = useApiKey()
   const { jobs, addJob, removeJob } = useScrapeQueue(apifyApiKey, apiKey, addReel, updateReel, autoAssignCollections)
   const [nav, setNav] = useState<NavState>({ tab: getInitialTab() })
@@ -61,6 +61,16 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
   const clearHighlight = useCallback(() => {
     setNav(prev => ({ ...prev, highlightReelId: undefined }))
   }, [])
+
+  const handleRetroactiveAutoAssign = useCallback(async () => {
+    const completeReels = reels.filter(r => r.ingestStatus === 'complete')
+    const reelData = completeReels.map(r => ({
+      id: r.id,
+      suggestedTags: r.suggestedTags || [],
+      concepts: r.concepts || [],
+    }))
+    return retroactiveAutoAssign(reelData)
+  }, [reels, retroactiveAutoAssign])
 
   return (
     <Layout nav={nav} onNavChange={handleNavChange} onLogout={logout} userPhoto={user.photoURL || undefined}>
@@ -99,6 +109,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           onAdd={addCollection}
           onDelete={deleteCollection}
           onReelClick={navigateToReel}
+          onRetroactiveAutoAssign={handleRetroactiveAutoAssign}
         />
       )}
       {nav.tab === 'datasources' && (

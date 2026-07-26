@@ -6,7 +6,12 @@ export interface ReelAnalysis {
   keyTakeaways: string[]
   suggestedTags: string[]
   concepts: { conceptName: string; conceptType: string; weight: number }[]
+  actionItems: string[]
   language: string
+  entities: { name: string; type: string }[]
+  contentCategory: string
+  sentiment: string
+  targetAudience: string
 }
 
 export async function processReel(
@@ -55,6 +60,7 @@ export async function processReel(
       ...analysis.keyTakeaways,
       ...analysis.suggestedTags,
       ...analysis.concepts.map(c => c.name),
+      ...analysis.entities.map(e => e.name),
       transcript,
     ].join(' ')
 
@@ -68,7 +74,12 @@ export async function processReel(
       suggestedTags: analysis.suggestedTags,
       searchableText,
       concepts,
+      actionItems: analysis.actionItems || [],
       language: analysis.language,
+      entities: analysis.entities || [],
+      contentCategory: analysis.contentCategory || 'other',
+      sentiment: analysis.sentiment || 'neutral',
+      targetAudience: analysis.targetAudience || '',
       ingestedAt: Date.now(),
     })
 
@@ -77,7 +88,12 @@ export async function processReel(
       keyTakeaways: analysis.keyTakeaways,
       suggestedTags: analysis.suggestedTags,
       concepts,
+      actionItems: analysis.actionItems || [],
       language: analysis.language,
+      entities: analysis.entities || [],
+      contentCategory: analysis.contentCategory || 'other',
+      sentiment: analysis.sentiment || 'neutral',
+      targetAudience: analysis.targetAudience || '',
     }
   } catch (error) {
     await updateFn(reelId, {

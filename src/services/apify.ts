@@ -45,6 +45,8 @@ export interface ApifyResult {
   topComments: { text: string; author: string; likes: number }[]
   // Transcript (from scraper if available)
   transcript: string
+  // Sponsors
+  sponsors: string[]
 }
 
 async function apifyFetch(
@@ -75,6 +77,7 @@ export async function startApifyRun(
     apifyFetch(token, `actors/${ACTOR_ID}/runs`, 'POST', {
       username: [reelUrl],
       resultsLimit: 1,
+      includeTranscript: true,
     })
   , { maxRetries: 2 }) as Record<string, unknown>
 
@@ -136,20 +139,19 @@ export async function fetchApifyDataset(
   // Parse engagement
   const likeCount = (item.likesCount || item.like_count || item.likeCount || 0) as number
   const commentCount = (item.commentsCount || item.comment_count || item.commentCount || 0) as number
-  const playCount = (item.playsCount || item.play_count || item.playCount || 0) as number
-  const viewCount = (item.view_count || item.viewCount || 0) as number
+  const playCount = (item.videoPlayCount || item.playsCount || item.play_count || item.playCount || 0) as number
+  const viewCount = (item.videoViewCount || item.view_count || item.viewCount || 0) as number
 
   // Parse media
   const thumbnailUrl = (item.thumbnailUrl || item.displayUrl || item.image || '') as string
   const videoUrl = (item.videoUrl || item.downloadUrl || '') as string
   const duration = (item.videoDuration || item.video_duration || item.videoDurationSec || 0) as number
-  const dims = (item.dimensions || {}) as Record<string, unknown>
-  const videoWidth = (dims.width || 0) as number
-  const videoHeight = (dims.height || 0) as number
+  const videoWidth = (item.dimensionsWidth || 0) as number
+  const videoHeight = (item.dimensionsHeight || 0) as number
   const isVideo = (item.is_video ?? true) as boolean
 
   // Parse audio
-  const musicInfo = (item.clips_music_attribution_info || {}) as Record<string, unknown>
+  const musicInfo = (item.musicInfo || item.clips_music_attribution_info || {}) as Record<string, unknown>
   const audioTrack = (musicInfo.song_name || item.audioTitle || '') as string
   const audioArtist = (musicInfo.artist_name || item.audioArtist || '') as string
   const audioUsesOriginal = (musicInfo.uses_original_audio || false) as boolean
@@ -158,25 +160,30 @@ export async function fetchApifyDataset(
   // Parse metadata
   const takenAt = (item.taken_at || '') as string
   const shortcode = (item.shortcode || '') as string
+  const locationName = (item.locationName || '') as string
   const locationObj = (item.location || {}) as Record<string, unknown>
-  const location = (locationObj.name || item.location || '') as string
-  const isPaidPartnership = (item.is_paid_partnership || false) as boolean
+  const location = (locationName || locationObj.name || '') as string
+  const isPaidPartnership = (item.paidPartnership || item.is_paid_partnership || false) as boolean
   const isAd = (item.is_ad || false) as boolean
 
+  // Parse sponsors
+  const sponsorsRaw = (item.sponsors || []) as Record<string, unknown>[]
+  const sponsors = sponsorsRaw.map(s => (s.username || '') as string).filter(Boolean)
+
   // Parse tagged users
-  const taggedUsersRaw = (item.tagged_user || item.taggedUsers || []) as Record<string, unknown>[]
+  const taggedUsersRaw = (item.taggedUsers || item.tagged_user || []) as Record<string, unknown>[]
   const taggedUsers = taggedUsersRaw.map(u => (u.username || '') as string).filter(Boolean)
 
   // Parse coauthors
   const coauthorsRaw = (item.coauthor_producers || item.coauthorUsernames || []) as (string | Record<string, unknown>)[]
   const coauthors = coauthorsRaw.map(c => typeof c === 'string' ? c : ((c as Record<string, unknown>).username || '') as string).filter(Boolean)
 
-  // Parse top comments
-  const commentsRaw = (item.comments || []) as Record<string, unknown>[]
-  const topComments = commentsRaw.slice(0, 5).map(c => ({
+  // Parse top comments (Apify uses latestComments)
+  const commentsRaw = (item.latestComments || item.comments || []) as Record<string, unknown>[]
+  const topComments = commentsRaw.slice(0, 10).map(c => ({
     text: (c.text || '') as string,
-    author: ((c.owner as Record<string, unknown>)?.username || '') as string,
-    likes: (c.like_count || 0) as number,
+    author: ((c.owner as Record<string, unknown>)?.username || c.ownerUsername || '') as string,
+    likes: (c.likesCount || c.like_count || 0) as number,
   }))
 
   // Transcript (some scrapers provide this)
@@ -186,7 +193,7 @@ export async function fetchApifyDataset(
     'caption', 'hashtags', 'mentions', 'creatorHandle', 'creatorName', 'creatorVerified',
     'creatorFollowers', 'thumbnailUrl', 'likeCount', 'commentCount', 'playCount', 'viewCount',
     'duration', 'videoUrl', 'audioTrack', 'audioArtist', 'location', 'takenAt',
-    'taggedUsers', 'coauthors', 'topComments',
+    'taggedUsers', 'coauthors', 'topComments', 'transcript', 'sponsors',
   ]
 
   sources.push({
@@ -230,6 +237,7 @@ export async function fetchApifyDataset(
       coauthors,
       topComments,
       transcript,
+      sponsors,
     },
     sources,
   }

@@ -52,15 +52,19 @@ export async function analyzeReel(
   concepts: { name: string; type: string }[]
   language: string
   actionItems: string[]
+  entities: { name: string; type: string }[]
+  contentCategory: string
+  sentiment: string
+  targetAudience: string
 }> {
   const raw = await callGroq(apiKey, [
     {
       role: 'system',
-      content: `You are an expert content analyst for Instagram Reels. Analyze transcripts and extract structured data. Always respond with valid JSON only, no markdown.`,
+      content: `You are an expert content analyst for Instagram Reels. Analyze transcripts deeply and extract structured data. Always respond with valid JSON only, no markdown.`,
     },
     {
       role: 'user',
-      content: `Analyze this Instagram Reel:
+      content: `Analyze this Instagram Reel deeply:
 
 TRANSCRIPT:
 ${transcript.slice(0, 6000)}
@@ -71,23 +75,70 @@ METADATA:
 - Caption: ${metadata.caption || 'None'}
 - Hashtags: ${metadata.hashtags?.join(', ') || 'None'}
 
+Extract ALL of the following:
+1. SUMMARY: 1-3 concise sentences capturing the core message
+2. KEY TAKEAWAYS: Specific, actionable takeaways (not generic)
+3. TAGS: Lowercase tags for categorization
+4. CONCEPTS: Named concepts with types (topic, skill, person, brand, tool, framework, trend)
+5. ENTITIES: Specific named items mentioned (books, products, tools, people, places, apps, courses, etc.)
+   - If the reel says "here are 5 books to read", list each book name
+   - If the reel mentions specific products, list each product
+   - If the reel mentions people, list each person
+   - Type can be: book, product, tool, person, place, app, course, website, brand, other
+6. CONTENT CATEGORY: primary category (educational, entertainment, motivational, instructional, review, storytelling, news, other)
+7. SENTIMENT: overall tone (positive, negative, neutral, mixed)
+8. TARGET AUDIENCE: who is this content for (e.g., "fitness beginners", "small business owners", "students")
+9. ACTION ITEMS: specific steps the viewer can take (if instructional)
+
 Respond with ONLY this JSON:
 {
-  "summary": "1-3 concise sentences capturing the core message",
-  "keyTakeaways": ["specific takeaway 1", "takeaway 2", "takeaway 3"],
+  "summary": "1-3 concise sentences",
+  "keyTakeaways": ["specific takeaway 1", "takeaway 2"],
   "suggestedTags": ["lowercase-tag1", "tag2"],
   "concepts": [{"name": "concept name", "type": "topic|skill|person|brand|tool|framework|trend"}],
   "language": "en",
-  "actionItems": ["actionable step 1 if instructional"]
+  "actionItems": ["actionable step 1"],
+  "entities": [{"name": "entity name", "type": "book|product|tool|person|place|app|course|website|brand|other"}],
+  "contentCategory": "educational|entertainment|motivational|instructional|review|storytelling|news|other",
+  "sentiment": "positive|negative|neutral|mixed",
+  "targetAudience": "description of target audience"
 }`,
     },
-  ], { temperature: 0.2, max_tokens: 1500 })
+  ], { temperature: 0.2, max_tokens: 2000 })
 
   try {
-    return JSON.parse(raw)
+    const parsed = JSON.parse(raw)
+    return {
+      summary: parsed.summary || '',
+      keyTakeaways: parsed.keyTakeaways || [],
+      suggestedTags: parsed.suggestedTags || [],
+      concepts: parsed.concepts || [],
+      language: parsed.language || 'en',
+      actionItems: parsed.actionItems || [],
+      entities: parsed.entities || [],
+      contentCategory: parsed.contentCategory || 'other',
+      sentiment: parsed.sentiment || 'neutral',
+      targetAudience: parsed.targetAudience || '',
+    }
   } catch {
     const match = raw.match(/\{[\s\S]*\}/)
-    if (match) return JSON.parse(match[0])
+    if (match) {
+      try {
+        const parsed = JSON.parse(match[0])
+        return {
+          summary: parsed.summary || '',
+          keyTakeaways: parsed.keyTakeaways || [],
+          suggestedTags: parsed.suggestedTags || [],
+          concepts: parsed.concepts || [],
+          language: parsed.language || 'en',
+          actionItems: parsed.actionItems || [],
+          entities: parsed.entities || [],
+          contentCategory: parsed.contentCategory || 'other',
+          sentiment: parsed.sentiment || 'neutral',
+          targetAudience: parsed.targetAudience || '',
+        }
+      } catch { /* fall through */ }
+    }
     return {
       summary: transcript.slice(0, 200),
       keyTakeaways: [],
@@ -95,6 +146,10 @@ Respond with ONLY this JSON:
       concepts: [],
       language: 'en',
       actionItems: [],
+      entities: [],
+      contentCategory: 'other',
+      sentiment: 'neutral',
+      targetAudience: '',
     }
   }
 }

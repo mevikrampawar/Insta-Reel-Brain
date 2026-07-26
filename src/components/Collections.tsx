@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, FolderOpen, Trash2, ChevronRight, X, Tag, ArrowRight } from 'lucide-react'
+import { Plus, FolderOpen, Trash2, ChevronRight, X, Tag, ArrowRight, RefreshCw, Loader2 } from 'lucide-react'
 import type { Collection, Reel } from '../types'
 
 interface Props {
@@ -8,16 +8,19 @@ interface Props {
   onAdd: (data: Partial<Collection>) => Promise<void>
   onDelete: (id: string) => Promise<void>
   onReelClick?: (reelId: string) => void
+  onRetroactiveAutoAssign?: () => Promise<{ processed: number; assigned: number }>
 }
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#8b5cf6']
 
-export function Collections({ collections, reels, onAdd, onDelete, onReelClick }: Props) {
+export function Collections({ collections, reels, onAdd, onDelete, onReelClick, onRetroactiveAutoAssign }: Props) {
   const [showNew, setShowNew] = useState(false)
   const [name, setName] = useState('')
   const [desc, setDesc] = useState('')
   const [color, setColor] = useState(COLORS[0])
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [retroRunning, setRetroRunning] = useState(false)
+  const [retroResult, setRetroResult] = useState<{ processed: number; assigned: number } | null>(null)
 
   const handleCreate = async () => {
     if (!name.trim()) return
@@ -32,11 +35,39 @@ export function Collections({ collections, reels, onAdd, onDelete, onReelClick }
           <h2 className="text-xl font-bold">Collections</h2>
           <p className="text-sm text-zinc-500">{collections.length} collections</p>
         </div>
-        <button onClick={() => setShowNew(true)}
-          className="flex items-center gap-1.5 px-3 min-h-[44px] bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
-          <Plus size={14} /> New
-        </button>
+        <div className="flex items-center gap-2">
+          {onRetroactiveAutoAssign && reels.length > 0 && (
+            <button
+              onClick={async () => {
+                setRetroRunning(true)
+                setRetroResult(null)
+                try {
+                  const result = await onRetroactiveAutoAssign()
+                  setRetroResult(result)
+                } catch {
+                  setRetroResult({ processed: 0, assigned: 0 })
+                }
+                setRetroRunning(false)
+              }}
+              disabled={retroRunning}
+              className="flex items-center gap-1.5 px-3 min-h-[44px] bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+            >
+              {retroRunning ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              Auto-Assign All
+            </button>
+          )}
+          <button onClick={() => setShowNew(true)}
+            className="flex items-center gap-1.5 px-3 min-h-[44px] bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
+            <Plus size={14} /> New
+          </button>
+        </div>
       </div>
+
+      {retroResult && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-xs text-emerald-400">
+          Processed {retroResult.processed} reels, assigned to {retroResult.assigned} collections
+        </div>
+      )}
 
       {/* New collection form */}
       {showNew && (

@@ -23,7 +23,12 @@ export interface Reel {
   suggestedTags: string[]
   searchableText?: string
   concepts: { conceptName: string; conceptType: string; weight: number }[]
+  actionItems: string[]
   language: string
+  entities: { name: string; type: string }[]
+  contentCategory: string
+  sentiment: string
+  targetAudience: string
   dataSources: DataSourceRecord[]
   createdAt: number
   updatedAt: number
