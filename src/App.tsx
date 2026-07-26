@@ -36,7 +36,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel, deleteReelsBulk } = useReels(user.uid)
   const { collections, addCollection, deleteCollection, renameCollection, addReelToCollection, removeReelFromCollection, batchDeleteCollections, batchMergeCollections, assignReelsByCategory } = useCollections(user.uid)
   const apiCtx = useApiKey()
-  const { jobs, addJob, removeJob } = useScrapeQueue(apiCtx.apifyApiKey, apiCtx.apiKey, addReel, updateReel, assignReelsByCategory, (apiCtx.isUsingMasterGroq || apiCtx.isUsingMasterApify) ? apiCtx.incrementMasterUsage : undefined)
+  const { jobs, addJob, removeJob } = useScrapeQueue(apiCtx.apifyApiKey, apiCtx.apiKey, addReel, updateReel, assignReelsByCategory, apiCtx.needsMasterApify && apiCtx.canUseMasterKey ? apiCtx.incrementMasterUsage : undefined)
   const [nav, setNav] = useState<NavState>({ tab: getInitialTab() })
   const [clipboardUrl, setClipboardUrl] = useState<string | null>(null)
   const [firstRun] = useState(() => {
@@ -45,7 +45,10 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
 
   // Handle deep link: ?url=<encoded_url> from iOS Shortcut or PWA share target
   // Also handles #ingest?url=<encoded_url> from service worker redirect
+  // Wait for API keys to load before processing to avoid empty-token auth errors
   useEffect(() => {
+    if (apiCtx.loading) return
+
     const params = new URLSearchParams(window.location.search)
     let deepUrl = params.get('url')
 
@@ -58,11 +61,15 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
       window.history.replaceState(null, '', `#ingest`)
       setNav({ tab: 'ingest' })
       try { localStorage.setItem('reelbrain-tab', 'ingest') } catch { /* ignore */ }
-      const timer = setTimeout(() => addJob(deepUrl), 100)
-      return () => clearTimeout(timer)
+      // Only add if not already in queue
+      const urlExists = jobs.some(j => j.url === deepUrl)
+      if (!urlExists) {
+        const timer = setTimeout(() => addJob(deepUrl), 100)
+        return () => clearTimeout(timer)
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [apiCtx.loading])
 
   // Clipboard detection — check for Instagram URLs when app loads
   useEffect(() => {
@@ -258,10 +265,11 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           onDismissClipboard={() => setClipboardUrl(null)}
           masterUsageCount={apiCtx.masterUsageCount}
           masterUsageLimit={apiCtx.masterUsageLimit}
-          isUsingMasterKeys={apiCtx.isUsingMasterGroq || apiCtx.isUsingMasterApify}
-          hasOwnKeys={apiCtx.hasOwnGroqKey && apiCtx.hasOwnApifyKey}
+          needsMasterApify={apiCtx.needsMasterApify}
+          hasOwnApifyKey={apiCtx.hasOwnApifyKey}
           canUseMasterKey={apiCtx.canUseMasterKey}
           onGoToSettings={() => handleNavChange({ tab: 'settings' })}
+          existingReelUrls={reels.map(r => r.url)}
         />
       )}
       {nav.tab === 'chat' && <Chat reels={reels} apiKey={apiCtx.apiKey} onReelClick={navigateToReel} />}

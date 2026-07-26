@@ -13,10 +13,11 @@ interface Props {
   onDismissClipboard?: () => void
   masterUsageCount?: number
   masterUsageLimit?: number
-  isUsingMasterKeys?: boolean
-  hasOwnKeys?: boolean
+  needsMasterApify?: boolean
+  hasOwnApifyKey?: boolean
   canUseMasterKey?: boolean
   onGoToSettings?: () => void
+  existingReelUrls?: string[]
 }
 
 const phaseUI: Record<JobPhase, { icon: typeof Loader2; color: string; label: string }> = {
@@ -27,6 +28,16 @@ const phaseUI: Record<JobPhase, { icon: typeof Loader2; color: string; label: st
   failed: { icon: XCircle, color: 'text-red-400', label: 'Failed' },
 }
 
+function normalizeUrl(raw: string): string {
+  try {
+    const u = new URL(raw.trim())
+    // Strip query params & trailing slash for dedup (Instagram URLs have tracking params)
+    return u.origin + u.pathname.replace(/\/+$/, '')
+  } catch {
+    return raw.trim()
+  }
+}
+
 function shortUrl(url: string) {
   try {
     const u = new URL(url)
@@ -35,22 +46,45 @@ function shortUrl(url: string) {
   } catch { return url.slice(0, 40) }
 }
 
-export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, onSwitchToLibrary, clipboardUrl, onDismissClipboard, masterUsageCount = 0, masterUsageLimit = 5, isUsingMasterKeys = false, hasOwnKeys = false, canUseMasterKey = true, onGoToSettings }: Props) {
+export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, onSwitchToLibrary, clipboardUrl, onDismissClipboard, masterUsageCount = 0, masterUsageLimit = 5, needsMasterApify = false, hasOwnApifyKey = false, canUseMasterKey = true, onGoToSettings, existingReelUrls = [] }: Props) {
   const [url, setUrl] = useState('')
+  const [duplicateMsg, setDuplicateMsg] = useState<string | null>(null)
   const hasApify = !!apifyApiKey.trim()
   const freeRemaining = Math.max(0, masterUsageLimit - masterUsageCount)
-  const limitReached = isUsingMasterKeys && !hasOwnKeys && !canUseMasterKey
+  const limitReached = needsMasterApify && !hasOwnApifyKey && !canUseMasterKey
 
   useEffect(() => {
     if (clipboardUrl && !url) setUrl(clipboardUrl)
   }, [clipboardUrl, url])
 
+  // Clear duplicate message after 3s
+  useEffect(() => {
+    if (!duplicateMsg) return
+    const t = setTimeout(() => setDuplicateMsg(null), 3000)
+    return () => clearTimeout(t)
+  }, [duplicateMsg])
+
   const handleSubmit = useCallback(() => {
     const trimmed = url.trim()
     if (!trimmed) return
+    const normalized = normalizeUrl(trimmed)
+
+    // Check if URL is already in the library (existing reel)
+    if (existingReelUrls.some(u => normalizeUrl(u) === normalized)) {
+      setDuplicateMsg('This reel is already in your library')
+      return
+    }
+
+    // Check if URL is already in the active queue
+    if (jobs.some(j => normalizeUrl(j.url) === normalized && j.phase !== 'failed')) {
+      setDuplicateMsg('This URL is already being processed')
+      return
+    }
+
     addJob(trimmed)
     setUrl('')
-  }, [url, addJob])
+    setDuplicateMsg(null)
+  }, [url, addJob, jobs, existingReelUrls])
 
   if (!apiKey) {
     return (
@@ -85,9 +119,9 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
       </div>
 
       {/* Free tier usage banner */}
-      {isUsingMasterKeys && !hasOwnKeys && (
-        <div className={`rounded-xl p-3 flex items-center gap-3 text-xs ${freeRemaining <= 2 || limitReached ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-indigo-500/10 border border-indigo-500/20'}`}>
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${freeRemaining <= 2 || limitReached ? 'bg-amber-500/20' : 'bg-indigo-500/20'}`}>
+      {needsMasterApify && !hasOwnApifyKey && (
+        <div className={`rounded-xl p-3 flex items-center gap-3 text-xs ${limitReached ? 'bg-amber-500/10 border border-amber-500/20' : freeRemaining <= 2 ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-indigo-500/10 border border-indigo-500/20'}`}>
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${limitReached ? 'bg-amber-500/20' : freeRemaining <= 2 ? 'bg-amber-500/20' : 'bg-indigo-500/20'}`}>
             {limitReached ? <AlertCircle size={14} className="text-amber-400" /> : <Sparkles size={14} className="text-indigo-400" />}
           </div>
           <div className="flex-1 min-w-0">
@@ -99,7 +133,7 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
             ) : freeRemaining > 0 ? (
               <p className={freeRemaining <= 2 ? 'text-amber-300' : 'text-indigo-300'}>
                 <span className="font-medium">{freeRemaining} free reel{freeRemaining !== 1 ? 's' : ''} remaining</span>
-                <span className="text-zinc-500"> — add your own API keys for unlimited use</span>
+                <span className="text-zinc-500"> — add your own Apify key for unlimited scraping</span>
               </p>
             ) : null}
           </div>
@@ -108,6 +142,14 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
               <Settings size={12} /> {limitReached ? 'Add Keys' : 'Keys'}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Duplicate URL warning */}
+      {duplicateMsg && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center gap-3 text-xs">
+          <AlertCircle size={14} className="text-amber-400 shrink-0" />
+          <p className="text-amber-300">{duplicateMsg}</p>
         </div>
       )}
 
@@ -175,14 +217,14 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-10 pr-4 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500 transition-colors"
           />
         </div>
-          <button
-            onClick={handleSubmit}
-            disabled={!url.trim() || !hasApify || limitReached}
-            aria-label="Submit URL"
-            className="min-w-[48px] min-h-[48px] flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium text-sm transition-colors"
-          >
-            <ArrowRight size={16} />
-          </button>
+        <button
+          onClick={handleSubmit}
+          disabled={!url.trim() || !hasApify || limitReached}
+          aria-label="Submit URL"
+          className="min-w-[48px] min-h-[48px] flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium text-sm transition-colors"
+        >
+          <ArrowRight size={16} />
+        </button>
       </div>
 
       {activeJobs.length > 0 && (
@@ -196,6 +238,9 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
                 <Icon size={14} className={`${ui.color} ${spinning ? 'animate-spin' : ''}`} />
                 <span className={`text-sm ${ui.color}`}>{ui.label}</span>
                 <span className="text-xs text-zinc-600 truncate flex-1">{shortUrl(job.url)}</span>
+                {job.phase === 'failed' && job.error && (
+                  <span className="text-[10px] text-red-400/80 max-w-[180px] truncate" title={job.error}>{job.error}</span>
+                )}
                 {job.phase === 'failed' && (
                   <button onClick={() => { addJob(job.url); removeJob(job.id) }} className="min-w-[36px] min-h-[36px] flex items-center justify-center text-xs text-zinc-500 hover:text-white">
                     <RefreshCw size={11} />

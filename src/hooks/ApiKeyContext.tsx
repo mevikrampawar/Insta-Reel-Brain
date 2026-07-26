@@ -14,6 +14,7 @@ interface ApiKeyContextType {
   isUsingMasterGroq: boolean
   isUsingMasterApify: boolean
   canUseMasterKey: boolean
+  needsMasterApify: boolean
   incrementMasterUsage: () => Promise<void>
 }
 
@@ -22,7 +23,7 @@ const ApiKeyContext = createContext<ApiKeyContextType>({
   hasOwnGroqKey: false, hasOwnApifyKey: false,
   masterUsageCount: 0, masterUsageLimit: FREE_REEL_LIMIT,
   isUsingMasterGroq: false, isUsingMasterApify: false,
-  canUseMasterKey: true,
+  canUseMasterKey: true, needsMasterApify: false,
   incrementMasterUsage: async () => {},
 })
 
@@ -82,6 +83,7 @@ export function ApiKeyProvider({ userId, children }: { userId: string; children:
 
   const isUsingMasterGroq = !hasOwnGroqKey
   const isUsingMasterApify = !hasOwnApifyKey
+  const needsMasterApify = isUsingMasterApify
   const canUseMasterKey = masterUsageCount < FREE_REEL_LIMIT
 
   return (
@@ -90,7 +92,7 @@ export function ApiKeyProvider({ userId, children }: { userId: string; children:
       hasOwnGroqKey, hasOwnApifyKey,
       masterUsageCount, masterUsageLimit: FREE_REEL_LIMIT,
       isUsingMasterGroq, isUsingMasterApify,
-      canUseMasterKey, incrementMasterUsage,
+      canUseMasterKey, needsMasterApify, incrementMasterUsage,
     }}>
       {children}
     </ApiKeyContext.Provider>
