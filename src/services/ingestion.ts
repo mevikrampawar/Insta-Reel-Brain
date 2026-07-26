@@ -59,8 +59,7 @@ export async function processReel(
       summary: analysis.summary,
       keyTakeaways: analysis.keyTakeaways,
       suggestedTags: analysis.suggestedTags,
-      embedding: [], // No longer using fake embeddings
-      searchableText, // New field for TF-IDF search
+      searchableText,
       concepts: analysis.concepts.map(c => ({ conceptName: c.name, conceptType: c.type, weight: 0.7 })),
       language: analysis.language,
       thumbnailUrl: input.thumbnailUrl || '',

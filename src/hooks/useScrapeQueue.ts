@@ -3,7 +3,7 @@ import type { Reel, DataSourceRecord } from '../types'
 import { startApifyRun, pollApifyRun, fetchApifyDataset, type ApifyResult } from '../services/apify'
 import { processReel } from '../services/ingestion'
 
-export type JobPhase = 'queued' | 'scraping' | 'scraped' | 'analyzing' | 'complete' | 'failed'
+export type JobPhase = 'queued' | 'scraping' | 'analyzing' | 'complete' | 'failed'
 
 export interface ScrapeJob {
   id: string

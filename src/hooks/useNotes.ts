@@ -5,7 +5,6 @@ import type { ReelNote } from '../types'
 
 export function useNotes(userId: string | undefined, reelId?: string) {
   const [notes, setNotes] = useState<ReelNote[]>([])
-  const [error, setError] = useState<string | null>(null)
 
   const fetch = useCallback(async () => {
     if (!userId) { setNotes([]); return }
@@ -18,9 +17,8 @@ export function useNotes(userId: string | undefined, reelId?: string) {
       }
       const snap = await getDocs(q)
       setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() } as ReelNote)))
-      setError(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load notes')
+    } catch {
+      // Non-fatal: notes just won't load
     }
   }, [userId, reelId])
 
@@ -47,5 +45,5 @@ export function useNotes(userId: string | undefined, reelId?: string) {
     await fetch()
   }, [userId, fetch])
 
-  return { notes, error, addNote, updateNote, deleteNote, refresh: fetch }
+  return { notes, addNote, updateNote, deleteNote }
 }

@@ -1,5 +1,5 @@
 export interface DataSourceRecord {
-  source: 'graphql' | 'apify' | 'groq'
+  source: 'apify' | 'groq'
   fields: string[]
   cost: 'free' | 'free-tier' | 'paid'
   timestamp: number
@@ -19,13 +19,12 @@ export interface Reel {
   language: string
   thumbnailUrl: string
   source: 'manual' | 'upload' | 'telegram' | 'ios-shortcut'
-  ingestStatus: 'queued' | 'scraping' | 'transcribing' | 'analyzing' | 'embedding' | 'complete' | 'failed'
+  ingestStatus: 'queued' | 'scraping' | 'analyzing' | 'complete' | 'failed'
   errorMessage: string
   transcript: string
   summary: string
   keyTakeaways: string[]
   suggestedTags: string[]
-  embedding: number[]
   searchableText?: string
   concepts: { conceptName: string; conceptType: string; weight: number }[]
   dataSources: DataSourceRecord[]

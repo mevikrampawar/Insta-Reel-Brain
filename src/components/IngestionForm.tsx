@@ -14,7 +14,6 @@ interface Props {
 const phaseUI: Record<JobPhase, { icon: typeof Loader2; color: string; label: string }> = {
   queued: { icon: Clock, color: 'text-zinc-500', label: 'Queued' },
   scraping: { icon: Loader2, color: 'text-orange-400', label: 'Scraping reel...' },
-  scraped: { icon: Loader2, color: 'text-blue-400', label: 'Processing data...' },
   analyzing: { icon: Loader2, color: 'text-purple-400', label: 'Analyzing with AI...' },
   complete: { icon: CheckCircle2, color: 'text-emerald-400', label: 'Done' },
   failed: { icon: XCircle, color: 'text-red-400', label: 'Failed' },
@@ -102,7 +101,7 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
           {activeJobs.map(job => {
             const ui = phaseUI[job.phase]
             const Icon = ui.icon
-            const spinning = job.phase === 'scraping' || job.phase === 'scraped' || job.phase === 'analyzing'
+            const spinning = job.phase === 'scraping' || job.phase === 'analyzing'
             return (
               <div key={job.id} className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg">
                 <Icon size={14} className={`${ui.color} ${spinning ? 'animate-spin' : ''}`} />
