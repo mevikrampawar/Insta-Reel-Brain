@@ -16,6 +16,7 @@ interface Props {
   highlightReelId?: string
   onClearHighlight?: () => void
   onReAnalyze?: (ids: string[]) => void
+  onReScrape?: (id: string) => void
   libraryFilters?: { categories?: string[]; creator?: string }
 }
 
@@ -79,7 +80,7 @@ function dateInRange(reel: Reel, range: DateRange): boolean {
   return d >= now - ms
 }
 
-export function Library({ reels, onDelete, onDeleteBulk, collections, userId, onAddToCollection, highlightReelId, onClearHighlight, onReAnalyze, libraryFilters }: Props) {
+export function Library({ reels, onDelete, onDeleteBulk, collections, userId, onAddToCollection, highlightReelId, onClearHighlight, onReAnalyze, onReScrape, libraryFilters }: Props) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [filters, setFilters] = useState<Filters>({ status: 'all', collection: 'all', categories: [], sentiments: [], qualityMin: 0, creator: 'all', dateRange: 'all' })
   const [sort, setSort] = useState<SortKey>('newest')
@@ -507,6 +508,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
               collections={collections}
               onAddToCollection={onAddToCollection}
               onReAnalyze={onReAnalyze ? () => onReAnalyze([reel.id]) : undefined}
+              onReScrape={onReScrape}
             />
           </div>
         ))}

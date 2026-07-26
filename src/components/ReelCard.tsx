@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ExternalLink, Tag, Clock, Trash2, ChevronDown, ChevronUp, AlertCircle, FolderPlus, StickyNote, Heart, MessageCircle, Play, Eye, Music, MapPin, Users, Shield, BookOpen, Package, Wrench, User, Globe, Smartphone, GraduationCap, Star, RefreshCw } from 'lucide-react'
+import { ExternalLink, Tag, Clock, Trash2, ChevronDown, ChevronUp, AlertCircle, FolderPlus, StickyNote, Heart, MessageCircle, Play, Eye, Music, MapPin, Users, Shield, BookOpen, Package, Wrench, User, Globe, Smartphone, GraduationCap, Star, RefreshCw, Download } from 'lucide-react'
 import type { Reel, Collection } from '../types'
 import { useNotes } from '../hooks/useNotes'
 import { Notes } from './Notes'
@@ -13,6 +13,7 @@ interface Props {
   collections?: Collection[]
   onAddToCollection?: (reelId: string, collectionId: string) => void
   onReAnalyze?: (id: string) => void
+  onReScrape?: (id: string) => void
 }
 
 function formatDuration(sec: number): string {
@@ -22,7 +23,7 @@ function formatDuration(sec: number): string {
   return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`
 }
 
-export function ReelCard({ reel, userId, onDelete, collections, onAddToCollection, onReAnalyze }: Props) {
+export function ReelCard({ reel, userId, onDelete, collections, onAddToCollection, onReAnalyze, onReScrape }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [showCollections, setShowCollections] = useState(false)
@@ -91,8 +92,15 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
               {onReAnalyze && (
                 <button onClick={() => onReAnalyze(reel.id)}
                   className="p-1.5 text-zinc-600 hover:text-amber-400 transition-colors rounded-lg"
-                  title="Re-analyze">
+                  title="Re-analyze with AI">
                   <RefreshCw size={13} />
+                </button>
+              )}
+              {onReScrape && reel.url && reel.url !== 'manual-entry' && (
+                <button onClick={() => onReScrape(reel.id)}
+                  className="p-1.5 text-zinc-600 hover:text-emerald-400 transition-colors rounded-lg"
+                  title="Re-scrape from source">
+                  <Download size={13} />
                 </button>
               )}
               <button onClick={() => setShowNotes(!showNotes)}

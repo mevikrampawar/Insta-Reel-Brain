@@ -5,6 +5,7 @@ import { useCollections } from './hooks/useCollections'
 import { useScrapeQueue } from './hooks/useScrapeQueue'
 import { ApiKeyProvider, useApiKey } from './hooks/ApiKeyContext'
 import { processReel } from './services/ingestion'
+import { startApifyRun, pollApifyRun, fetchApifyDataset } from './services/apify'
 import { classifyReelCategory } from './services/groq'
 import { Login } from './components/Login'
 import { Layout, type NavState } from './components/Layout'
@@ -111,6 +112,72 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
     }
   }, [reels, apiKey, updateReel])
 
+  const handleReScrape = useCallback(async (id: string) => {
+    const reel = reels.find(r => r.id === id)
+    if (!reel || !apifyApiKey) return
+    await updateReel(id, { ingestStatus: 'scraping' })
+    try {
+      const { runId } = await startApifyRun(apifyApiKey, reel.url)
+      let status = 'RUNNING'
+      let datasetId: string | undefined
+      const deadline = Date.now() + 120_000
+      while (Date.now() < deadline) {
+        const poll = await pollApifyRun(apifyApiKey, runId)
+        status = poll.status
+        datasetId = poll.datasetId
+        if (status === 'SUCCEEDED' || status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') break
+        await new Promise(r => setTimeout(r, 3000))
+      }
+      if (status !== 'SUCCEEDED' || !datasetId) {
+        await updateReel(id, { ingestStatus: 'failed', errorMessage: `Re-scrape failed: ${status}` })
+        return
+      }
+      const { result } = await fetchApifyDataset(apifyApiKey, datasetId)
+      if (!result) {
+        await updateReel(id, { ingestStatus: 'failed', errorMessage: 'Re-scrape returned no data' })
+        return
+      }
+      await updateReel(id, {
+        title: result.title || reel.title,
+        caption: result.caption,
+        hashtags: result.hashtags,
+        mentions: result.mentions,
+        creatorHandle: result.creatorHandle || reel.creatorHandle,
+        creatorName: result.creatorName,
+        creatorVerified: result.creatorVerified,
+        creatorFollowers: result.creatorFollowers,
+        creatorProfilePic: result.creatorProfilePic,
+        likeCount: result.likeCount,
+        commentCount: result.commentCount,
+        playCount: result.playCount,
+        viewCount: result.viewCount,
+        durationSec: result.duration,
+        videoUrl: result.videoUrl,
+        thumbnailUrl: result.thumbnailUrl || reel.thumbnailUrl,
+        takenAt: result.takenAt,
+        shortcode: result.shortcode,
+        location: result.location,
+        isPaidPartnership: result.isPaidPartnership,
+        taggedUsers: result.taggedUsers,
+        coauthors: result.coauthors,
+        topComments: result.topComments,
+        audioTrack: result.audioTrack,
+        audioArtist: result.audioArtist,
+      })
+      await processReel(apiKey, {
+        url: reel.url,
+        transcript: result.transcript || result.caption || '',
+        title: result.title,
+        creatorHandle: result.creatorHandle,
+        caption: result.caption,
+        hashtags: result.hashtags,
+        thumbnailUrl: result.thumbnailUrl,
+      }, id, updateReel)
+    } catch {
+      await updateReel(id, { ingestStatus: 'failed', errorMessage: 'Re-scrape failed' })
+    }
+  }, [reels, apifyApiKey, apiKey, updateReel])
+
   return (
     <Layout nav={nav} onNavChange={handleNavChange} onLogout={logout} userPhoto={user.photoURL || undefined}>
       {nav.tab === 'dashboard' && <DashboardView reels={reels} collections={collections} onReelClick={navigateToReel} onFilterNavigate={navigateToLibraryFiltered} />}
@@ -130,6 +197,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           highlightReelId={nav.highlightReelId}
           onClearHighlight={clearHighlight}
           onReAnalyze={handleReAnalyze}
+          onReScrape={handleReScrape}
           libraryFilters={nav.libraryFilters}
         />
       )}
