@@ -39,6 +39,30 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
   const { jobs, addJob, removeJob } = useScrapeQueue(apifyApiKey, apiKey, addReel, updateReel, assignReelsByCategory)
   const [nav, setNav] = useState<NavState>({ tab: getInitialTab() })
 
+  // Handle deep link: ?url=<encoded_url> from iOS Shortcut or PWA share target
+  // Also handles #ingest?url=<encoded_url> from service worker redirect
+  useEffect(() => {
+    // Case 1: ?url= in query string (direct deep link)
+    const params = new URLSearchParams(window.location.search)
+    let deepUrl = params.get('url')
+
+    // Case 2: ?url= inside the hash fragment (PWA share target redirect)
+    if (!deepUrl && window.location.hash.includes('url=')) {
+      const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '')
+      deepUrl = hashParams.get('url')
+    }
+
+    if (deepUrl) {
+      // Clean the URL immediately
+      window.history.replaceState(null, '', `#ingest`)
+      setNav({ tab: 'ingest' })
+      try { localStorage.setItem('reelbrain-tab', 'ingest') } catch { /* ignore */ }
+      const timer = setTimeout(() => addJob(deepUrl), 100)
+      return () => clearTimeout(timer)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Persist tab to localStorage + URL hash
   const handleNavChange = useCallback((newNav: NavState) => {
     setNav(newNav)
