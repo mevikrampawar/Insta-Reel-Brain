@@ -74,13 +74,13 @@ export function Collections({ collections, reels, onAdd, onDelete, onReelClick, 
         <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-medium text-sm">New Collection</h3>
-            <button onClick={() => setShowNew(false)} className="text-zinc-500 hover:text-white"><X size={16} /></button>
+            <button onClick={() => setShowNew(false)} className="min-w-[36px] min-h-[36px] flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"><X size={16} /></button>
           </div>
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Collection name"
             className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500" autoFocus />
           <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Description (optional)"
             className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500" />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {COLORS.map(c => (
               <button key={c} onClick={() => setColor(c)}
                 className={`min-w-[36px] min-h-[36px] rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-white' : ''}`}

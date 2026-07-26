@@ -154,7 +154,7 @@ function FieldCard({ icon, title, badge, badgeCls, desc, link, linkText, linkHin
         <div className="relative flex-1">
           <input type={showKey ? 'text' : 'password'} value={state.local} onChange={e => onChange(e.target.value)} placeholder={placeholder}
             className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500 transition-colors font-mono" />
-          <button onClick={onToggleShow} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500 hover:text-zinc-300">{showKey ? 'Hide' : 'Show'}</button>
+          <button onClick={onToggleShow} className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[36px] min-h-[36px] flex items-center justify-center text-xs text-zinc-500 hover:text-zinc-300 rounded-lg hover:bg-zinc-700/50 transition-colors">{showKey ? 'Hide' : 'Show'}</button>
         </div>
         {has && <button onClick={onClear} className="min-w-[48px] min-h-[48px] flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-zinc-400 hover:text-red-400 transition-colors" title="Clear"><Trash2 size={14} /></button>}
       </div>

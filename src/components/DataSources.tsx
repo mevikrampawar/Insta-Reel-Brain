@@ -49,7 +49,7 @@ export function DataSources({ reels, apifyApiKey, groqApiKey, onReelClick }: Pro
 
       {/* Stats */}
       {stats.totalReels > 0 && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 text-center">
             <p className="text-2xl font-bold text-emerald-400">{stats.freePercent}%</p>
             <p className="text-xs text-zinc-500 mt-1">Free Data</p>

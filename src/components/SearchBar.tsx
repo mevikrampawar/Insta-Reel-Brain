@@ -49,7 +49,7 @@ export function SearchBar({ reels, onResults }: Props) {
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-10 pr-9 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500 transition-colors"
           />
           {query && (
-            <button onClick={handleClear} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
+            <button onClick={handleClear} className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[32px] min-h-[32px] flex items-center justify-center text-zinc-500 hover:text-zinc-300 rounded-lg hover:bg-zinc-800 transition-colors">
               <X size={14} />
             </button>
           )}
@@ -68,7 +68,7 @@ export function SearchBar({ reels, onResults }: Props) {
       <div className="flex items-center gap-2 flex-wrap">
         <button
           onClick={() => { setMode('semantic'); if (hasSearched && query.trim()) handleSearch() }}
-          className={`flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg text-xs font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 min-h-[40px] rounded-lg text-xs font-medium transition-colors ${
             mode === 'semantic'
               ? 'bg-indigo-500/15 border border-indigo-500/30 text-indigo-400'
               : 'bg-zinc-800 border border-zinc-700 text-zinc-500 hover:text-zinc-300'
@@ -78,7 +78,7 @@ export function SearchBar({ reels, onResults }: Props) {
         </button>
         <button
           onClick={() => { setMode('keyword'); if (hasSearched && query.trim()) handleSearch() }}
-          className={`flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg text-xs font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 min-h-[40px] rounded-lg text-xs font-medium transition-colors ${
             mode === 'keyword'
               ? 'bg-indigo-500/15 border border-indigo-500/30 text-indigo-400'
               : 'bg-zinc-800 border border-zinc-700 text-zinc-500 hover:text-zinc-300'

@@ -43,7 +43,7 @@ export function Notes({ notes, reelTitle, onAdd, onUpdate, onDelete }: Props) {
           className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-indigo-500 resize-none"
         />
         <button onClick={handleAdd} disabled={!content.trim()}
-          className="self-end px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg transition-colors">
+          className="self-end min-w-[40px] min-h-[40px] flex items-center justify-center px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg transition-colors">
           <Plus size={14} />
         </button>
       </div>
@@ -56,8 +56,8 @@ export function Notes({ notes, reelTitle, onAdd, onUpdate, onDelete }: Props) {
               <div className="flex gap-2">
                 <textarea value={editContent} onChange={e => setEditContent(e.target.value)}
                   className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs resize-none" rows={2} />
-                <button onClick={() => handleSave(note.id)} className="text-emerald-400"><Check size={12} /></button>
-                <button onClick={() => setEditingId(null)} className="text-zinc-500"><X size={12} /></button>
+                <button onClick={() => handleSave(note.id)} className="min-w-[36px] min-h-[36px] flex items-center justify-center text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors"><Check size={14} /></button>
+                <button onClick={() => setEditingId(null)} className="min-w-[36px] min-h-[36px] flex items-center justify-center text-zinc-500 hover:bg-zinc-700/50 rounded-lg transition-colors"><X size={14} /></button>
               </div>
             ) : (
               <>
@@ -66,9 +66,9 @@ export function Notes({ notes, reelTitle, onAdd, onUpdate, onDelete }: Props) {
                   <span className="text-[10px] text-zinc-600">{new Date(note.createdAt).toLocaleDateString()}</span>
                   <div className="flex gap-2">
                     <button onClick={() => { setEditingId(note.id); setEditContent(note.content) }}
-                      className="text-zinc-500 hover:text-zinc-300 transition-colors"><Edit3 size={11} /></button>
+                      className="min-w-[36px] min-h-[36px] flex items-center justify-center text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50 rounded-lg transition-colors"><Edit3 size={13} /></button>
                     <button onClick={() => onDelete(note.id)}
-                      className="text-zinc-500 hover:text-red-400 transition-colors"><Trash2 size={11} /></button>
+                      className="min-w-[36px] min-h-[36px] flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Trash2 size={13} /></button>
                   </div>
                 </div>
               </>
