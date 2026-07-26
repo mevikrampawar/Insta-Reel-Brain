@@ -6,7 +6,7 @@ import { useScrapeQueue } from './hooks/useScrapeQueue'
 import { ApiKeyProvider, useApiKey } from './hooks/ApiKeyContext'
 import { processReel } from './services/ingestion'
 import { startApifyRun, pollApifyRun, fetchApifyDataset } from './services/apify'
-import { classifyReelCategory } from './services/groq'
+import { classifyReelHierarchy } from './services/groq'
 import { Login } from './components/Login'
 import { Layout, type NavState } from './components/Layout'
 import { Library } from './components/Library'
@@ -73,18 +73,18 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
   const handleRetroactiveAutoAssign = useCallback(async () => {
     const completeReels = reels.filter(r => r.ingestStatus === 'complete')
 
-    // Re-classify reels missing primaryCategory
-    const reelsToClassify = completeReels.filter(r => !r.primaryCategory)
+    // Re-classify reels missing primaryCategory or categoryPath
+    const reelsToClassify = completeReels.filter(r => !r.primaryCategory || !r.categoryPath?.length)
     for (const reel of reelsToClassify) {
       try {
-        const primaryCategory = await classifyReelCategory(
+        const categoryPath = await classifyReelHierarchy(
           apiKey,
           reel.summary || reel.transcript || reel.caption || '',
           reel.suggestedTags || [],
           reel.entities || [],
           reel.contentCategory || 'other',
         )
-        await updateReel(reel.id, { primaryCategory })
+        await updateReel(reel.id, { primaryCategory: categoryPath[0], categoryPath })
       } catch { /* skip classification failure */ }
     }
 

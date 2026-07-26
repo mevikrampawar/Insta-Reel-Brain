@@ -217,6 +217,52 @@ Respond with ONLY one of: ${MAJOR_CATEGORIES.join(', ')}`,
   return 'Education & Learning'
 }
 
+export async function classifyReelHierarchy(
+  apiKey: string,
+  summary: string,
+  tags: string[],
+  entities: { name: string; type: string }[],
+  contentCategory: string,
+): Promise<string[]> {
+  const raw = await callGroq(apiKey, [
+    {
+      role: 'system',
+      content: `You are a content taxonomy classifier. Assign a hierarchical category path to content. The first level MUST be exactly one of: ${MAJOR_CATEGORIES.join(', ')}. Subsequent levels are specific sub-categories you determine based on the content. Return 2-3 levels total. Respond with valid JSON only.`,
+    },
+    {
+      role: 'user',
+      content: `Classify this content into a hierarchical category path (2-3 levels).
+
+Summary: ${summary.slice(0, 500)}
+Tags: ${tags.slice(0, 10).join(', ')}
+Entities: ${entities.slice(0, 10).map(e => `${e.name} (${e.type})`).join(', ')}
+Content type: ${contentCategory}
+
+Rules:
+- First element MUST be one of: ${MAJOR_CATEGORIES.join(', ')}
+- Second element is a sub-category (e.g., "Coding", "Weight Training", "Stock Market")
+- Third element (optional) is a more specific topic (e.g., "React", "Python", "HIIT")
+- Keep it concise — each level is 1-3 words max
+
+Respond with ONLY this JSON:
+{
+  "categoryPath": ["Major Category", "Sub-Category", "Specific Topic"]
+}`,
+    },
+  ], { temperature: 0.2, max_tokens: 150 })
+
+  const parsed = parseJsonFromLLMResponse<{ categoryPath?: string[] }>(raw, {})
+  if (Array.isArray(parsed.categoryPath) && parsed.categoryPath.length >= 2) {
+    const path = parsed.categoryPath.map(s => String(s).trim()).filter(Boolean)
+    if (path.length >= 2 && MAJOR_CATEGORIES.includes(path[0] as typeof MAJOR_CATEGORIES[number])) {
+      return path.slice(0, 3)
+    }
+  }
+  // Fallback: use flat classifier then append generic sub-category
+  const flat = await classifyReelCategory(apiKey, summary, tags, entities, contentCategory)
+  return [flat, 'General']
+}
+
 export async function extractMetadataFromText(
   apiKey: string,
   url: string,
