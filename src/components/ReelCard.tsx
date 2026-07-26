@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ExternalLink, Tag, Clock, Trash2, ChevronDown, ChevronUp, AlertCircle, FolderPlus, StickyNote } from 'lucide-react'
+import { ExternalLink, Tag, Clock, Trash2, ChevronDown, ChevronUp, AlertCircle, FolderPlus, StickyNote, Heart, MessageCircle, Play, Eye, Music, MapPin, Users, Shield } from 'lucide-react'
 import type { Reel, Collection } from '../types'
 import { useNotes } from '../hooks/useNotes'
 import { Notes } from './Notes'
@@ -10,6 +10,19 @@ interface Props {
   onDelete: (id: string) => void
   collections?: Collection[]
   onAddToCollection?: (reelId: string, collectionId: string) => void
+}
+
+function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return String(n)
+}
+
+function formatDuration(sec: number): string {
+  if (!sec) return ''
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+  return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`
 }
 
 export function ReelCard({ reel, userId, onDelete, collections, onAddToCollection }: Props) {
@@ -49,8 +62,16 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-zinc-700 transition-colors">
       <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          {/* Thumbnail */}
+          {reel.thumbnailUrl && (
+            <div className="w-16 h-20 rounded-lg overflow-hidden bg-zinc-800 shrink-0">
+              <img src={reel.thumbnailUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+            </div>
+          )}
+
           <div className="flex-1 min-w-0">
+            {/* Title + link */}
             <div className="flex items-center gap-2 mb-1">
               <h3 className="font-medium text-sm truncate">{reel.title}</h3>
               {reel.url && reel.url !== 'manual-entry' && (
@@ -60,9 +81,56 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
                 </a>
               )}
             </div>
-            {reel.creatorHandle && <p className="text-xs text-zinc-500 mb-2">@{reel.creatorHandle}</p>}
+
+            {/* Creator */}
+            {reel.creatorHandle && (
+              <div className="flex items-center gap-1.5 mb-2">
+                <p className="text-xs text-zinc-500">@{reel.creatorHandle}</p>
+                {reel.creatorVerified && <Shield size={10} className="text-blue-400" />}
+                {reel.creatorFollowers > 0 && (
+                  <span className="text-[10px] text-zinc-600">· {formatCount(reel.creatorFollowers)} followers</span>
+                )}
+              </div>
+            )}
+
             <p className="text-sm text-zinc-300 line-clamp-2">{reel.summary}</p>
+
+            {/* Engagement row */}
+            <div className="flex items-center gap-3 mt-2 flex-wrap">
+              {reel.likeCount > 0 && (
+                <span className="flex items-center gap-1 text-[11px] text-zinc-500">
+                  <Heart size={10} /> {formatCount(reel.likeCount)}
+                </span>
+              )}
+              {reel.commentCount > 0 && (
+                <span className="flex items-center gap-1 text-[11px] text-zinc-500">
+                  <MessageCircle size={10} /> {formatCount(reel.commentCount)}
+                </span>
+              )}
+              {reel.playCount > 0 && (
+                <span className="flex items-center gap-1 text-[11px] text-zinc-500">
+                  <Play size={10} /> {formatCount(reel.playCount)}
+                </span>
+              )}
+              {reel.viewCount > 0 && (
+                <span className="flex items-center gap-1 text-[11px] text-zinc-500">
+                  <Eye size={10} /> {formatCount(reel.viewCount)}
+                </span>
+              )}
+              {reel.durationSec > 0 && (
+                <span className="flex items-center gap-1 text-[11px] text-zinc-500">
+                  <Clock size={10} /> {formatDuration(reel.durationSec)}
+                </span>
+              )}
+              {reel.audioTrack && (
+                <span className="flex items-center gap-1 text-[11px] text-zinc-500">
+                  <Music size={10} /> {reel.audioTrack}
+                </span>
+              )}
+            </div>
           </div>
+
+          {/* Action buttons */}
           <div className="flex items-center gap-1 shrink-0">
             <button onClick={() => setShowNotes(!showNotes)}
               className={`p-1.5 rounded-lg transition-colors ${showNotes ? 'bg-amber-500/10 text-amber-400' : 'text-zinc-600 hover:text-amber-400'}`}
@@ -120,15 +188,17 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
             {collections.map(c => {
               const inCollection = c.reelIds?.includes(reel.id)
               return (
-                <button key={c.id} onClick={() => !inCollection && onAddToCollection?.(reel.id, c.id)}
+                <button key={c.id}
+                  onClick={() => !inCollection && onAddToCollection?.(reel.id, c.id)}
                   disabled={inCollection}
-                  className={`px-2 py-1 rounded text-xs transition-colors ${
+                  className={`px-2.5 py-1 rounded-lg text-xs transition-colors flex items-center gap-1.5 ${
                     inCollection
-                      ? 'bg-zinc-700 text-zinc-400 cursor-default'
+                      ? 'bg-zinc-700/50 text-zinc-400 cursor-default'
                       : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
                   }`}>
-                  <span className="w-2 h-2 rounded-full inline-block mr-1" style={{ background: c.color }} />
-                  {c.name} {inCollection && '✓'}
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color }} />
+                  {c.name}
+                  {inCollection && <span className="text-emerald-400">✓</span>}
                 </button>
               )
             })}
@@ -146,6 +216,53 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
       {/* Expanded content */}
       {expanded && (
         <div className="border-t border-zinc-800 p-4 space-y-3 text-sm">
+          {/* Caption */}
+          {reel.caption && (
+            <div>
+              <p className="text-xs font-medium text-zinc-400 mb-1">Caption</p>
+              <p className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap">{reel.caption}</p>
+            </div>
+          )}
+
+          {/* Hashtags */}
+          {reel.hashtags?.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-zinc-400 mb-1">Hashtags</p>
+              <div className="flex flex-wrap gap-1">
+                {reel.hashtags.map(h => (
+                  <span key={h} className="text-xs text-indigo-400">#{h}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Mentions */}
+          {reel.mentions?.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-zinc-400 mb-1">Mentions</p>
+              <div className="flex flex-wrap gap-1">
+                {reel.mentions.map(m => (
+                  <span key={m} className="text-xs text-purple-400">{m}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Location */}
+          {reel.location && (
+            <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+              <MapPin size={12} /> {reel.location}
+            </div>
+          )}
+
+          {/* Tagged users */}
+          {reel.taggedUsers?.length > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+              <Users size={12} /> Tagged: {reel.taggedUsers.join(', ')}
+            </div>
+          )}
+
+          {/* Key Takeaways */}
           {reel.keyTakeaways.length > 0 && (
             <div>
               <p className="text-xs font-medium text-zinc-400 mb-1">Key Takeaways</p>
@@ -158,15 +275,36 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
               </ul>
             </div>
           )}
+
+          {/* Transcript */}
           {reel.transcript && (
             <div>
               <p className="text-xs font-medium text-zinc-400 mb-1">Transcript</p>
               <p className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap max-h-48 overflow-auto">{reel.transcript}</p>
             </div>
           )}
-          <div className="flex items-center gap-1 text-xs text-zinc-500">
-            <Clock size={12} />
-            {new Date(reel.createdAt).toLocaleDateString()}
+
+          {/* Top comments */}
+          {reel.topComments?.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-zinc-400 mb-1">Top Comments</p>
+              <div className="space-y-1.5">
+                {reel.topComments.map((c, i) => (
+                  <div key={i} className="bg-zinc-800/50 rounded-lg px-3 py-2">
+                    <p className="text-xs text-zinc-300">{c.text}</p>
+                    <p className="text-[10px] text-zinc-600 mt-1">@{c.author} · {c.likes} likes</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Metadata footer */}
+          <div className="flex items-center gap-3 text-xs text-zinc-500 flex-wrap">
+            <span className="flex items-center gap-1"><Clock size={12} /> {new Date(reel.createdAt).toLocaleDateString()}</span>
+            {reel.language && <span className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">{reel.language}</span>}
+            {reel.isPaidPartnership && <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded">Paid partnership</span>}
+            {reel.coauthors?.length > 0 && <span>Co-authored: {reel.coauthors.join(', ')}</span>}
           </div>
         </div>
       )}

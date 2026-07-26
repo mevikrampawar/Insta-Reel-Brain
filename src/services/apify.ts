@@ -5,15 +5,45 @@ const APIFY_BASE = 'https://api.apify.com/v2'
 const ACTOR_ID = 'apify~instagram-reel-scraper'
 
 export interface ApifyResult {
+  // Title & caption
   title: string
-  creatorHandle: string
   caption: string
-  hashtags: string[]
-  thumbnailUrl: string
-  videoUrl: string
+  // Creator
+  creatorHandle: string
+  creatorName: string
+  creatorVerified: boolean
+  creatorFollowers: number
+  creatorProfilePic: string
+  // Engagement
   likeCount: number
   commentCount: number
+  playCount: number
+  viewCount: number
+  // Media
+  thumbnailUrl: string
+  videoUrl: string
   duration: number
+  videoWidth: number
+  videoHeight: number
+  isVideo: boolean
+  // Audio
+  audioTrack: string
+  audioArtist: string
+  audioUsesOriginal: boolean
+  hasAudio: boolean
+  // Hashtags & mentions
+  hashtags: string[]
+  mentions: string[]
+  // Metadata
+  takenAt: string
+  shortcode: string
+  location: string
+  isPaidPartnership: boolean
+  isAd: boolean
+  taggedUsers: string[]
+  coauthors: string[]
+  topComments: { text: string; author: string; likes: number }[]
+  // Transcript (from scraper if available)
   transcript: string
 }
 
@@ -84,17 +114,84 @@ export async function fetchApifyDataset(
   if (!dsData || !Array.isArray(dsData) || dsData.length === 0) return { result: null, sources }
 
   const item = dsData[0] as Record<string, unknown>
-  const caption = (item.caption || item.text || '') as string
+
+  // Parse owner/creator
+  const owner = (item.owner || {}) as Record<string, unknown>
+  const creatorHandle = (item.ownerUsername || owner.username || '') as string
+  const creatorName = (item.ownerFullName || owner.full_name || '') as string
+  const creatorVerified = (item.ownerIsVerified || owner.is_verified || false) as boolean
+  const creatorFollowers = ((owner.edge_followed_by as Record<string, unknown>)?.count || owner.followers || 0) as number
+  const creatorProfilePic = (item.ownerProfilePicUrl || owner.profile_pic_url || '') as string
+
+  // Parse caption & hashtags
+  const caption = (item.caption || item.text || item.caption_text || '') as string
   const rawHashtags = item.hashtags as string[] | undefined
   const hashtags = rawHashtags || [
     ...new Set<string>(
       (caption.match(/#[\w]+/g) || []).map((h: string) => h.slice(1).toLowerCase())
     ),
   ]
+  const mentions = (item.mentions || []) as string[]
+
+  // Parse engagement
+  const likeCount = (item.likesCount || item.like_count || item.likeCount || 0) as number
+  const commentCount = (item.commentsCount || item.comment_count || item.commentCount || 0) as number
+  const playCount = (item.playsCount || item.play_count || item.playCount || 0) as number
+  const viewCount = (item.view_count || item.viewCount || 0) as number
+
+  // Parse media
+  const thumbnailUrl = (item.thumbnailUrl || item.displayUrl || item.image || '') as string
+  const videoUrl = (item.videoUrl || item.downloadUrl || '') as string
+  const duration = (item.videoDuration || item.video_duration || item.videoDurationSec || 0) as number
+  const dims = (item.dimensions || {}) as Record<string, unknown>
+  const videoWidth = (dims.width || 0) as number
+  const videoHeight = (dims.height || 0) as number
+  const isVideo = (item.is_video ?? true) as boolean
+
+  // Parse audio
+  const musicInfo = (item.clips_music_attribution_info || {}) as Record<string, unknown>
+  const audioTrack = (musicInfo.song_name || item.audioTitle || '') as string
+  const audioArtist = (musicInfo.artist_name || item.audioArtist || '') as string
+  const audioUsesOriginal = (musicInfo.uses_original_audio || false) as boolean
+  const hasAudio = (item.has_audio ?? true) as boolean
+
+  // Parse metadata
+  const takenAt = (item.taken_at || '') as string
+  const shortcode = (item.shortcode || '') as string
+  const locationObj = (item.location || {}) as Record<string, unknown>
+  const location = (locationObj.name || item.location || '') as string
+  const isPaidPartnership = (item.is_paid_partnership || false) as boolean
+  const isAd = (item.is_ad || false) as boolean
+
+  // Parse tagged users
+  const taggedUsersRaw = (item.tagged_user || item.taggedUsers || []) as Record<string, unknown>[]
+  const taggedUsers = taggedUsersRaw.map(u => (u.username || '') as string).filter(Boolean)
+
+  // Parse coauthors
+  const coauthorsRaw = (item.coauthor_producers || item.coauthorUsernames || []) as (string | Record<string, unknown>)[]
+  const coauthors = coauthorsRaw.map(c => typeof c === 'string' ? c : ((c as Record<string, unknown>).username || '') as string).filter(Boolean)
+
+  // Parse top comments
+  const commentsRaw = (item.comments || []) as Record<string, unknown>[]
+  const topComments = commentsRaw.slice(0, 5).map(c => ({
+    text: (c.text || '') as string,
+    author: ((c.owner as Record<string, unknown>)?.username || '') as string,
+    likes: (c.like_count || 0) as number,
+  }))
+
+  // Transcript (some scrapers provide this)
+  const transcript = (item.transcription || item.transcript || '') as string
+
+  const fields = [
+    'caption', 'hashtags', 'mentions', 'creatorHandle', 'creatorName', 'creatorVerified',
+    'creatorFollowers', 'thumbnailUrl', 'likeCount', 'commentCount', 'playCount', 'viewCount',
+    'duration', 'videoUrl', 'audioTrack', 'audioArtist', 'location', 'takenAt',
+    'taggedUsers', 'coauthors', 'topComments',
+  ]
 
   sources.push({
     source: 'apify',
-    fields: ['caption', 'hashtags', 'creatorHandle', 'thumbnailUrl', 'likeCount', 'commentCount', 'duration', 'transcript'],
+    fields,
     cost: 'free-tier',
     timestamp: Date.now(),
   })
@@ -102,15 +199,37 @@ export async function fetchApifyDataset(
   return {
     result: {
       title: caption.split('\n')[0]?.slice(0, 150) || '',
-      creatorHandle: (item.ownerUsername || (item.owner as Record<string, unknown>)?.username || '') as string,
       caption,
+      creatorHandle,
+      creatorName,
+      creatorVerified,
+      creatorFollowers,
+      creatorProfilePic,
+      likeCount,
+      commentCount,
+      playCount,
+      viewCount,
+      thumbnailUrl,
+      videoUrl,
+      duration,
+      videoWidth,
+      videoHeight,
+      isVideo,
+      audioTrack,
+      audioArtist,
+      audioUsesOriginal,
+      hasAudio,
       hashtags: Array.isArray(hashtags) ? hashtags : [],
-      thumbnailUrl: (item.thumbnailUrl || item.displayUrl || '') as string,
-      videoUrl: (item.videoUrl || item.downloadUrl || '') as string,
-      likeCount: (item.likesCount || item.likeCount || 0) as number,
-      commentCount: (item.commentsCount || item.commentCount || 0) as number,
-      duration: (item.videoDuration || item.videoDurationSec || 0) as number,
-      transcript: (item.transcription || item.transcript || '') as string,
+      mentions,
+      takenAt: takenAt as string,
+      shortcode,
+      location: typeof location === 'string' ? location : '',
+      isPaidPartnership,
+      isAd,
+      taggedUsers,
+      coauthors,
+      topComments,
+      transcript,
     },
     sources,
   }

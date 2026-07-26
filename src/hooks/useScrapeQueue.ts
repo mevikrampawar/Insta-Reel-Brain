@@ -24,6 +24,7 @@ export function useScrapeQueue(
   groqApiKey: string,
   addReel: (data: Partial<Reel>) => Promise<string | undefined>,
   updateReel: (id: string, data: Partial<Reel>) => Promise<void>,
+  autoAssignCollections?: (reelId: string, tags: string[], concepts: { conceptName: string; conceptType: string }[]) => Promise<void>,
 ) {
   const [jobs, setJobs] = useState<ScrapeJob[]>([])
   const mounted = useRef(true)
@@ -52,10 +53,36 @@ export function useScrapeQueue(
       const reelId = await addReel({
         url: job.url,
         title: result.title || 'Untitled Reel',
-        creatorHandle: result.creatorHandle,
         caption: result.caption,
         hashtags: result.hashtags,
+        mentions: result.mentions,
+        creatorHandle: result.creatorHandle,
+        creatorName: result.creatorName,
+        creatorVerified: result.creatorVerified,
+        creatorFollowers: result.creatorFollowers,
+        creatorProfilePic: result.creatorProfilePic,
+        likeCount: result.likeCount,
+        commentCount: result.commentCount,
+        playCount: result.playCount,
+        viewCount: result.viewCount,
+        durationSec: result.duration,
+        videoUrl: result.videoUrl,
+        videoWidth: result.videoWidth,
+        videoHeight: result.videoHeight,
+        isVideo: result.isVideo,
+        audioTrack: result.audioTrack,
+        audioArtist: result.audioArtist,
+        audioUsesOriginal: result.audioUsesOriginal,
+        hasAudio: result.hasAudio,
         thumbnailUrl: result.thumbnailUrl,
+        takenAt: result.takenAt,
+        shortcode: result.shortcode,
+        location: result.location,
+        isPaidPartnership: result.isPaidPartnership,
+        isAd: result.isAd,
+        taggedUsers: result.taggedUsers,
+        coauthors: result.coauthors,
+        topComments: result.topComments,
         ingestStatus: 'queued',
         dataSources: [
           ...sources,
@@ -66,7 +93,7 @@ export function useScrapeQueue(
 
       patch(job.id, { phase: 'analyzing', result, sources, datasetId })
 
-      await processReel(groqApiKey, {
+      const analysis = await processReel(groqApiKey, {
         url: job.url,
         transcript: result.transcript || result.caption || '',
         title: result.title,
@@ -75,6 +102,15 @@ export function useScrapeQueue(
         hashtags: result.hashtags,
         thumbnailUrl: result.thumbnailUrl,
       }, reelId, updateReel, () => {})
+
+      // Auto-assign to collections based on AI-generated tags + concepts
+      if (autoAssignCollections && analysis) {
+        try {
+          await autoAssignCollections(reelId, analysis.suggestedTags, analysis.concepts)
+        } catch {
+          // Non-critical: auto-collection assignment failure shouldn't block the flow
+        }
+      }
 
       patch(job.id, { phase: 'complete' })
       setTimeout(() => { if (mounted.current) remove(job.id) }, 5000)

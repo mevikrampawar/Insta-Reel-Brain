@@ -16,9 +16,9 @@ import { DataSources } from './components/DataSources'
 
 function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAuth>['user']>; logout: () => void }) {
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel } = useReels(user.uid)
-  const { collections, addCollection, deleteCollection, addReelToCollection } = useCollections(user.uid)
+  const { collections, addCollection, deleteCollection, addReelToCollection, autoAssignCollections } = useCollections(user.uid)
   const { apiKey, apifyApiKey } = useApiKey()
-  const { jobs, addJob, removeJob } = useScrapeQueue(apifyApiKey, apiKey, addReel, updateReel)
+  const { jobs, addJob, removeJob } = useScrapeQueue(apifyApiKey, apiKey, addReel, updateReel, autoAssignCollections)
   const [nav, setNav] = useState<NavState>({ tab: 'library' })
 
   const navigateToReel = useCallback((reelId: string) => {

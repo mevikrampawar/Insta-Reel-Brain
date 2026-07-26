@@ -10,13 +10,9 @@ export interface Reel {
   userId: string
   url: string
   title: string
-  creatorHandle: string
-  creatorName: string
   caption: string
   hashtags: string[]
-  audioTrack: string
-  durationSec: number
-  language: string
+  mentions: string[]
   thumbnailUrl: string
   source: 'manual' | 'upload' | 'telegram' | 'ios-shortcut'
   ingestStatus: 'queued' | 'scraping' | 'analyzing' | 'complete' | 'failed'
@@ -27,10 +23,47 @@ export interface Reel {
   suggestedTags: string[]
   searchableText?: string
   concepts: { conceptName: string; conceptType: string; weight: number }[]
+  language: string
   dataSources: DataSourceRecord[]
   createdAt: number
   updatedAt: number
   ingestedAt: number
+
+  // Creator info
+  creatorHandle: string
+  creatorName: string
+  creatorVerified: boolean
+  creatorFollowers: number
+  creatorProfilePic: string
+
+  // Engagement metrics
+  likeCount: number
+  commentCount: number
+  playCount: number
+  viewCount: number
+
+  // Media
+  durationSec: number
+  videoUrl: string
+  videoWidth: number
+  videoHeight: number
+  isVideo: boolean
+
+  // Audio
+  audioTrack: string
+  audioArtist: string
+  audioUsesOriginal: boolean
+  hasAudio: boolean
+
+  // Metadata
+  takenAt: string
+  shortcode: string
+  location: string
+  isPaidPartnership: boolean
+  isAd: boolean
+  taggedUsers: string[]
+  coauthors: string[]
+  topComments: { text: string; author: string; likes: number }[]
 }
 
 export interface Collection {
@@ -40,6 +73,7 @@ export interface Collection {
   description: string
   color: string
   reelIds: string[]
+  isAuto: boolean
   createdAt: number
 }
 

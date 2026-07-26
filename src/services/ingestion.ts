@@ -1,6 +1,14 @@
 import type { Reel } from '../types'
 import { analyzeReel, extractMetadataFromText } from './groq'
 
+export interface ReelAnalysis {
+  summary: string
+  keyTakeaways: string[]
+  suggestedTags: string[]
+  concepts: { conceptName: string; conceptType: string; weight: number }[]
+  language: string
+}
+
 export async function processReel(
   apiKey: string,
   input: {
@@ -15,9 +23,8 @@ export async function processReel(
   reelId: string,
   updateFn: (id: string, data: Partial<Reel>) => Promise<void>,
   onProgress?: (status: string) => void,
-): Promise<void> {
+): Promise<ReelAnalysis | null> {
   try {
-    // If transcript is empty, try to extract metadata from caption via Groq
     let transcript = input.transcript || ''
     let metadata = {
       creator: input.creatorHandle,
@@ -36,7 +43,6 @@ export async function processReel(
         if (extracted.hashtags?.length && !metadata.hashtags?.length) metadata.hashtags = extracted.hashtags
         transcript = extracted.description || input.caption
       } catch {
-        // Non-fallback: use caption as transcript
         transcript = input.caption
       }
     }
@@ -44,7 +50,6 @@ export async function processReel(
     onProgress?.('Analyzing content with AI...')
     const analysis = await analyzeReel(apiKey, transcript, metadata)
 
-    // Build TF-IDF searchable text (stored with reel, used at search time)
     const searchableText = [
       analysis.summary,
       ...analysis.keyTakeaways,
@@ -53,6 +58,8 @@ export async function processReel(
       transcript,
     ].join(' ')
 
+    const concepts = analysis.concepts.map(c => ({ conceptName: c.name, conceptType: c.type, weight: 0.7 }))
+
     await updateFn(reelId, {
       ingestStatus: 'complete',
       transcript,
@@ -60,15 +67,23 @@ export async function processReel(
       keyTakeaways: analysis.keyTakeaways,
       suggestedTags: analysis.suggestedTags,
       searchableText,
-      concepts: analysis.concepts.map(c => ({ conceptName: c.name, conceptType: c.type, weight: 0.7 })),
+      concepts,
       language: analysis.language,
-      thumbnailUrl: input.thumbnailUrl || '',
       ingestedAt: Date.now(),
     })
+
+    return {
+      summary: analysis.summary,
+      keyTakeaways: analysis.keyTakeaways,
+      suggestedTags: analysis.suggestedTags,
+      concepts,
+      language: analysis.language,
+    }
   } catch (error) {
     await updateFn(reelId, {
       ingestStatus: 'failed',
       errorMessage: error instanceof Error ? error.message : 'Processing failed',
     })
+    return null
   }
 }
