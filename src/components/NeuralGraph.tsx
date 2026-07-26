@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react'
 import cytoscape from 'cytoscape'
 import { ZoomIn, ZoomOut, Maximize2, X } from 'lucide-react'
 import type { Reel, Collection } from '../types'
@@ -12,30 +12,33 @@ const NODE_COLORS: Record<string, string> = {
   concept: '#10b981',
 }
 
-export function NeuralGraph({ reels, collections, onReelClick }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const cyRef = useRef<cytoscape.Core | null>(null)
-  const [selectedNode, setSelectedNode] = useState<{ id: string; label: string; type: string; detail?: string } | null>(null)
-  const [showLabels, setShowLabels] = useState(true)
+function buildElements(reels: Reel[], _collections: Collection[]) {
+  const completeReels = reels.filter(r => r.ingestStatus === 'complete')
+  const elements: cytoscape.ElementDefinition[] = []
+  const addedCreators = new Set<string>()
+  const addedEntities = new Set<string>()
+  const addedConcepts = new Set<string>()
+  const addedCategories = new Set<string>()
 
-  const buildGraph = useCallback(() => {
-    if (!containerRef.current) return
-    if (cyRef.current) { cyRef.current.destroy(); cyRef.current = null }
+  const categories = [...new Set(completeReels.map(r => r.primaryCategory).filter(Boolean))] as string[]
 
-    const completeReels = reels.filter(r => r.ingestStatus === 'complete')
-    const elements: cytoscape.ElementDefinition[] = []
-
-    // Build reel → category map
-    const reelCategory = new Map<string, string>()
-    for (const reel of completeReels) {
-      if (reel.primaryCategory) reelCategory.set(reel.id, reel.primaryCategory)
+  for (const cat of categories) {
+    if (!addedCategories.has(cat!)) {
+      addedCategories.add(cat!)
+      elements.push({
+        group: 'nodes',
+        data: { id: `cat-${cat}`, label: cat, type: 'category' },
+        classes: 'category',
+      })
     }
+  }
 
-    // Get unique categories
-    const categories = [...new Set(completeReels.map(r => r.primaryCategory).filter(Boolean))]
+  for (const reel of completeReels) {
+    const rid = `reel-${reel.id}`
+    const cat = reel.primaryCategory || 'Uncategorized'
 
-    // Create compound parent nodes (one per category)
-    for (const cat of categories) {
+    if (!addedCategories.has(cat)) {
+      addedCategories.add(cat)
       elements.push({
         group: 'nodes',
         data: { id: `cat-${cat}`, label: cat, type: 'category' },
@@ -43,120 +46,196 @@ export function NeuralGraph({ reels, collections, onReelClick }: Props) {
       })
     }
 
-    // Track nodes we've already added
-    const addedCreators = new Set<string>()
-    const addedEntities = new Set<string>()
-    const addedConcepts = new Set<string>()
+    elements.push({
+      group: 'nodes',
+      data: {
+        id: rid,
+        label: (reel.title || 'Untitled').slice(0, 30),
+        type: 'reel',
+        reelId: reel.id,
+        parent: `cat-${cat}`,
+      },
+      classes: 'reel',
+    })
 
-    for (const reel of completeReels) {
-      const rid = `reel-${reel.id}`
-      const cat = reel.primaryCategory || 'Uncategorized'
-
-      // Ensure parent exists
-      if (!elements.find(e => e.data.id === `cat-${cat}`)) {
+    if (reel.creatorHandle) {
+      const cid = `creator-${reel.creatorHandle.toLowerCase()}`
+      if (!addedCreators.has(cid)) {
+        addedCreators.add(cid)
         elements.push({
           group: 'nodes',
-          data: { id: `cat-${cat}`, label: cat, type: 'category' },
-          classes: 'category',
+          data: { id: cid, label: `@${reel.creatorHandle}`, type: 'creator' },
+          classes: 'creator',
         })
       }
-
       elements.push({
-        group: 'nodes',
-        data: {
-          id: rid,
-          label: (reel.title || 'Untitled').slice(0, 30),
-          type: 'reel',
-          reelId: reel.id,
-          parent: `cat-${cat}`,
-        },
-        classes: 'reel',
+        group: 'edges',
+        data: { id: `${rid}-${cid}`, source: rid, target: cid },
       })
+    }
 
-      // Creator node (not parented — shared across categories)
-      if (reel.creatorHandle) {
-        const cid = `creator-${reel.creatorHandle.toLowerCase()}`
-        if (!addedCreators.has(cid)) {
-          addedCreators.add(cid)
-          elements.push({
-            group: 'nodes',
-            data: { id: cid, label: `@${reel.creatorHandle}`, type: 'creator' },
-            classes: 'creator',
-          })
-        }
+    for (const e of (reel.entities || []).slice(0, 5)) {
+      const eid = `entity-${e.name.toLowerCase()}`
+      if (!addedEntities.has(eid)) {
+        addedEntities.add(eid)
         elements.push({
-          group: 'edges',
-          data: { id: `${rid}-${cid}`, source: rid, target: cid, weight: 0.3 },
+          group: 'nodes',
+          data: { id: eid, label: e.name, type: 'entity', detail: e.type },
+          classes: 'entity',
         })
       }
+      elements.push({
+        group: 'edges',
+        data: { id: `${rid}-${eid}`, source: rid, target: eid },
+      })
+    }
 
-      // Entity nodes
-      for (const e of (reel.entities || []).slice(0, 5)) {
-        const eid = `entity-${e.name.toLowerCase()}`
-        if (!addedEntities.has(eid)) {
-          addedEntities.add(eid)
-          elements.push({
-            group: 'nodes',
-            data: { id: eid, label: e.name, type: 'entity', detail: e.type },
-            classes: 'entity',
-          })
-        }
+    for (const c of (reel.concepts || []).slice(0, 5)) {
+      const cid = `concept-${c.conceptName}`
+      if (!addedConcepts.has(cid)) {
+        addedConcepts.add(cid)
         elements.push({
-          group: 'edges',
-          data: { id: `${rid}-${eid}`, source: rid, target: eid, weight: 0.2 },
+          group: 'nodes',
+          data: { id: cid, label: c.conceptName, type: 'concept', detail: c.conceptType },
+          classes: 'concept',
         })
       }
+      elements.push({
+        group: 'edges',
+        data: { id: `${rid}-${cid}`, source: rid, target: cid },
+      })
+    }
+  }
 
-      // Concept nodes
-      for (const c of (reel.concepts || []).slice(0, 5)) {
-        const cid = `concept-${c.conceptName}`
-        if (!addedConcepts.has(cid)) {
-          addedConcepts.add(cid)
-          elements.push({
-            group: 'nodes',
-            data: { id: cid, label: c.conceptName, type: 'concept', detail: c.conceptType },
-            classes: 'concept',
-          })
-        }
-        elements.push({
-          group: 'edges',
-          data: { id: `${rid}-${cid}`, source: rid, target: cid, weight: c.weight || 0.4 },
-        })
-      }
-    }
+  return elements
+}
 
-    // Concept co-occurrence edges
-    const conceptReels = new Map<string, Set<string>>()
-    for (const el of elements) {
-      if (el.group === 'edges' && el.data.source.startsWith('concept-') && el.data.target.startsWith('reel-')) {
-        const set = conceptReels.get(el.data.source) || new Set()
-        set.add(el.data.target)
-        conceptReels.set(el.data.source, set)
-      }
-    }
-    // Also check reel→concept edges
-    for (const el of elements) {
-      if (el.group === 'edges' && el.data.source.startsWith('reel-') && el.data.target.startsWith('concept-')) {
-        const set = conceptReels.get(el.data.target) || new Set()
-        set.add(el.data.source)
-        conceptReels.set(el.data.target, set)
-      }
-    }
-    const conceptIds = [...conceptReels.keys()]
-    for (let i = 0; i < conceptIds.length; i++) {
-      for (let j = i + 1; j < conceptIds.length; j++) {
-        const a = conceptReels.get(conceptIds[i])!
-        const b = conceptReels.get(conceptIds[j])!
-        const shared = [...a].filter(x => b.has(x)).length
-        const union = new Set([...a, ...b]).size
-        if (shared >= 2 && shared / union > 0.15) {
-          elements.push({
-            group: 'edges',
-            data: { id: `${conceptIds[i]}-${conceptIds[j]}`, source: conceptIds[i], target: conceptIds[j], weight: 0.3 },
-          })
-        }
-      }
-    }
+function getGraphStyle(showLabels: boolean): any[] {
+  const label = showLabels ? 'data(label)' : ''
+  return [
+    {
+      selector: 'node.category',
+      css: {
+        'background-color': '#18181b',
+        'background-opacity': 0.6,
+        'border-color': '#27272a',
+        'border-width': 1,
+        'shape': 'round-rectangle',
+        'label': label,
+        'color': '#71717a',
+        'font-size': '11px',
+        'font-weight': 'bold',
+        'text-valign': 'top',
+        'text-halign': 'center',
+        'text-margin-y': 8,
+        'padding': '30px',
+      },
+    },
+    {
+      selector: 'node.reel',
+      css: {
+        'background-color': NODE_COLORS.reel,
+        'width': 12,
+        'height': 12,
+        'label': label,
+        'color': '#d4d4d8',
+        'font-size': '9px',
+        'text-valign': 'bottom',
+        'text-margin-y': 6,
+        'text-wrap': 'wrap',
+        'text-max-width': '80px',
+      },
+    },
+    {
+      selector: 'node.creator',
+      css: {
+        'background-color': NODE_COLORS.creator,
+        'shape': 'diamond',
+        'width': 14,
+        'height': 14,
+        'label': label,
+        'color': '#d4d4d8',
+        'font-size': '8px',
+        'text-valign': 'bottom',
+        'text-margin-y': 6,
+      },
+    },
+    {
+      selector: 'node.entity',
+      css: {
+        'background-color': NODE_COLORS.entity,
+        'shape': 'round-rectangle',
+        'width': 10,
+        'height': 10,
+        'label': label,
+        'color': '#a1a1aa',
+        'font-size': '7px',
+        'text-valign': 'bottom',
+        'text-margin-y': 5,
+      },
+    },
+    {
+      selector: 'node.concept',
+      css: {
+        'background-color': NODE_COLORS.concept,
+        'shape': 'ellipse',
+        'width': 9,
+        'height': 9,
+        'label': label,
+        'color': '#a1a1aa',
+        'font-size': '7px',
+        'text-valign': 'bottom',
+        'text-margin-y': 5,
+      },
+    },
+    {
+      selector: 'edge',
+      css: {
+        'line-color': '#3f3f46',
+        'width': 1,
+        'opacity': 0.4,
+      },
+    },
+    {
+      selector: 'node:selected',
+      css: {
+        'border-color': '#ffffff',
+        'border-width': 2,
+      },
+    },
+    {
+      selector: '.highlighted',
+      css: { 'opacity': 1 },
+    },
+    {
+      selector: '.dimmed',
+      css: { 'opacity': 0.1 },
+    },
+    {
+      selector: 'edge.dimmed',
+      css: { 'opacity': 0.03 },
+    },
+  ]
+}
+
+export function NeuralGraph({ reels, collections, onReelClick }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const cyRef = useRef<cytoscape.Core | null>(null)
+  const onReelClickRef = useRef(onReelClick)
+  const [selectedNode, setSelectedNode] = useState<{ id: string; label: string; type: string; detail?: string } | null>(null)
+  const [showLabels, setShowLabels] = useState(true)
+  const initializedRef = useRef(false)
+  const elementIdsRef = useRef<Set<string>>(new Set())
+
+  const elements = useMemo(() => buildElements(reels, collections), [reels, collections])
+
+  // Stable callback ref — prevents graph rebuilds when parent re-renders
+  useEffect(() => { onReelClickRef.current = onReelClick }, [onReelClick])
+
+  // Initialize cytoscape ONCE
+  useEffect(() => {
+    if (!containerRef.current || initializedRef.current) return
+    initializedRef.current = true
 
     const cy = cytoscape({
       container: containerRef.current,
@@ -165,116 +244,7 @@ export function NeuralGraph({ reels, collections, onReelClick }: Props) {
       maxZoom: 4,
       wheelSensitivity: 0.3,
       boxSelectionEnabled: false,
-      style: [
-        {
-          selector: 'node.category',
-          style: {
-            'background-color': '#18181b',
-            'background-opacity': 0.6,
-            'border-color': '#27272a',
-            'border-width': 1,
-            'shape': 'round-rectangle',
-            'label': showLabels ? 'data(label)' : '',
-            'color': '#71717a',
-            'font-size': '11px',
-            'font-weight': 'bold',
-            'text-valign': 'top',
-            'text-halign': 'center',
-            'text-margin-y': 8,
-            'padding': '30px',
-          },
-        },
-        {
-          selector: 'node.reel',
-          style: {
-            'background-color': NODE_COLORS.reel,
-            'width': 12,
-            'height': 12,
-            'label': showLabels ? 'data(label)' : '',
-            'color': '#d4d4d8',
-            'font-size': '9px',
-            'text-valign': 'bottom',
-            'text-margin-y': 6,
-            'text-wrap': 'wrap',
-            'text-max-width': '80px',
-          },
-        },
-        {
-          selector: 'node.creator',
-          style: {
-            'background-color': NODE_COLORS.creator,
-            'shape': 'diamond',
-            'width': 14,
-            'height': 14,
-            'label': showLabels ? 'data(label)' : '',
-            'color': '#d4d4d8',
-            'font-size': '8px',
-            'text-valign': 'bottom',
-            'text-margin-y': 6,
-          },
-        },
-        {
-          selector: 'node.entity',
-          style: {
-            'background-color': NODE_COLORS.entity,
-            'shape': 'round-rectangle',
-            'width': 10,
-            'height': 10,
-            'label': showLabels ? 'data(label)' : '',
-            'color': '#a1a1aa',
-            'font-size': '7px',
-            'text-valign': 'bottom',
-            'text-margin-y': 5,
-          },
-        },
-        {
-          selector: 'node.concept',
-          style: {
-            'background-color': NODE_COLORS.concept,
-            'shape': 'ellipse',
-            'width': 9,
-            'height': 9,
-            'label': showLabels ? 'data(label)' : '',
-            'color': '#a1a1aa',
-            'font-size': '7px',
-            'text-valign': 'bottom',
-            'text-margin-y': 5,
-          },
-        },
-        {
-          selector: 'edge',
-          style: {
-            'line-color': '#3f3f46',
-            'width': 1,
-            'opacity': 0.4,
-          },
-        },
-        {
-          selector: 'node:selected',
-          style: {
-            'border-color': '#ffffff',
-            'border-width': 2,
-          },
-        },
-        {
-          selector: 'node.highlighted',
-          style: {
-            'opacity': 1,
-          },
-        },
-        {
-          selector: 'node.dimmed',
-          style: {
-            'opacity': 0.1,
-          },
-        },
-        {
-          selector: 'edge.dimmed',
-          style: {
-            'opacity': 0.03,
-          },
-        },
-      ],
+      style: getGraphStyle(showLabels),
       layout: {
         name: 'cose',
         idealEdgeLength: () => 120,
@@ -289,7 +259,10 @@ export function NeuralGraph({ reels, collections, onReelClick }: Props) {
       },
     })
 
-    // Click handler
+    // Store initial element IDs
+    elementIdsRef.current = new Set(elements.map(e => e.data.id).filter(Boolean) as string[])
+
+    // Click handlers — use refs to avoid stale closures
     cy.on('tap', 'node', (evt) => {
       const node = evt.target
       const type = node.data('type')
@@ -297,14 +270,13 @@ export function NeuralGraph({ reels, collections, onReelClick }: Props) {
       const detail = node.data('detail')
       const reelId = node.data('reelId')
 
-      if (type === 'reel' && reelId && onReelClick) {
-        onReelClick(reelId)
+      if (type === 'reel' && reelId && onReelClickRef.current) {
+        onReelClickRef.current(reelId)
         return
       }
 
       setSelectedNode({ id: node.id(), label, type, detail })
 
-      // Highlight neighborhood
       const neighborhood = node.neighborhood().add(node)
       cy.elements().addClass('dimmed')
       neighborhood.removeClass('dimmed')
@@ -319,18 +291,85 @@ export function NeuralGraph({ reels, collections, onReelClick }: Props) {
     })
 
     cyRef.current = cy
-  }, [reels, collections, showLabels, onReelClick])
 
+    return () => {
+      cy.destroy()
+      cyRef.current = null
+      initializedRef.current = false
+    }
+  }, []) // Empty deps — run ONCE
+
+  // Sync elements: add/remove without destroying the graph
   useEffect(() => {
-    buildGraph()
-    return () => { if (cyRef.current) { cyRef.current.destroy(); cyRef.current = null } }
-  }, [buildGraph])
+    const cy = cyRef.current
+    if (!cy) return
 
-  const zoomIn = useCallback(() => { cyRef.current?.zoom({ level: cyRef.current.zoom() * 1.3, renderedPosition: { x: (containerRef.current?.clientWidth || 900) / 2, y: (containerRef.current?.clientHeight || 600) / 2 } }) }, [])
-  const zoomOut = useCallback(() => { cyRef.current?.zoom({ level: cyRef.current.zoom() / 1.3, renderedPosition: { x: (containerRef.current?.clientWidth || 900) / 2, y: (containerRef.current?.clientHeight || 600) / 2 } }) }, [])
+    const newIds = new Set(elements.map(e => e.data.id).filter(Boolean) as string[])
+    const oldIds = elementIdsRef.current
+
+    // Remove elements that no longer exist
+    for (const oldId of oldIds) {
+      if (!newIds.has(oldId)) {
+        const ele = cy.getElementById(oldId)
+        if (ele.length > 0) cy.remove(ele)
+      }
+    }
+
+    // Add new elements
+    const toAdd = elements.filter(e => e.data.id && !oldIds.has(e.data.id))
+    if (toAdd.length > 0) {
+      cy.add(toAdd as any)
+      // Run layout only for new nodes
+      const newNodes = cy.nodes().filter(n => toAdd.some(e => e.data.id === n.id()))
+      if (newNodes.length > 0) {
+        newNodes.layout({
+          name: 'cose',
+          idealEdgeLength: () => 120,
+          nodeRepulsion: () => 6000,
+          gravity: 0.3,
+          numIter: 200,
+          animate: false,
+          padding: 40,
+        } as any).run()
+      }
+    }
+
+    elementIdsRef.current = newIds
+  }, [elements])
+
+  // Sync label visibility WITHOUT rebuilding graph
+  useEffect(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    cy.style().fromJson(getGraphStyle(showLabels)).update()
+  }, [showLabels])
+
+  // Clear selection on background click
+  const clearSelection = useCallback(() => {
+    setSelectedNode(null)
+    cyRef.current?.elements().removeClass('dimmed highlighted')
+  }, [])
+
+  const zoomIn = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    const w = containerRef.current?.clientWidth || 900
+    const h = containerRef.current?.clientHeight || 600
+    cy.zoom({ level: cy.zoom() * 1.3, renderedPosition: { x: w / 2, y: h / 2 } })
+  }, [])
+
+  const zoomOut = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    const w = containerRef.current?.clientWidth || 900
+    const h = containerRef.current?.clientHeight || 600
+    cy.zoom({ level: cy.zoom() / 1.3, renderedPosition: { x: w / 2, y: h / 2 } })
+  }, [])
+
   const fitView = useCallback(() => { cyRef.current?.fit(undefined, 40) }, [])
 
-  const connectedReels = selectedNode ? (() => {
+  const connectedReels = useMemo(() => {
+    if (!selectedNode) return []
     if (selectedNode.type === 'reel') {
       const reelId = selectedNode.id.replace('reel-', '')
       const reel = reels.find(r => r.id === reelId)
@@ -341,18 +380,20 @@ export function NeuralGraph({ reels, collections, onReelClick }: Props) {
     const connected = cy.getElementById(selectedNode.id).neighborhood('node[type="reel"]')
     const reelIds = connected.map(n => n.data('reelId')).filter(Boolean)
     return reels.filter(r => reelIds.includes(r.id)).slice(0, 5)
-  })() : []
+  }, [selectedNode, reels])
 
   return (
     <div className="relative w-full h-full">
-      <div ref={containerRef} className="w-full h-full" />
+      <div ref={containerRef} className="w-full h-full" onClick={(e) => {
+        if (e.target === containerRef.current) clearSelection()
+      }} />
 
       {/* Controls */}
       <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-10">
         <button onClick={zoomIn} className="w-9 h-9 bg-zinc-900/90 border border-zinc-700 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"><ZoomIn size={16} /></button>
         <button onClick={zoomOut} className="w-9 h-9 bg-zinc-900/90 border border-zinc-700 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"><ZoomOut size={16} /></button>
         <button onClick={fitView} className="w-9 h-9 bg-zinc-900/90 border border-zinc-700 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"><Maximize2 size={16} /></button>
-        <button onClick={() => setShowLabels(!showLabels)}
+        <button onClick={() => setShowLabels(s => !s)}
           className={`w-9 h-9 bg-zinc-900/90 border border-zinc-700 rounded-lg flex items-center justify-center text-xs font-bold transition-colors ${showLabels ? 'text-indigo-400 border-indigo-500/30' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}>
           Aa
         </button>
@@ -375,16 +416,14 @@ export function NeuralGraph({ reels, collections, onReelClick }: Props) {
 
       {/* Detail panel */}
       {selectedNode && (
-        <div className="absolute bottom-16 md:bottom-4 left-3 right-3 md:left-auto md:right-16 md:w-72 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-20 overflow-hidden">
+        <div className="absolute bottom-16 md:bottom-4 left-3 right-3 md:left-auto md:right-16 md:w-72 bg-zinc-900/95 backdrop-blur-xl border border-zinc-700 rounded-xl shadow-2xl z-20 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
             <div className="min-w-0">
               <p className="font-medium text-sm truncate">{selectedNode.label}</p>
               <p className="text-[11px] text-zinc-500 capitalize">{selectedNode.type}{selectedNode.detail ? ` · ${selectedNode.detail}` : ''}</p>
             </div>
-            <button onClick={() => {
-              setSelectedNode(null)
-              cyRef.current?.elements().removeClass('dimmed highlighted')
-            }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"><X size={14} /></button>
+            <button onClick={clearSelection}
+              className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"><X size={14} /></button>
           </div>
           {connectedReels.length > 0 && (
             <div className="p-3 max-h-60 overflow-auto">

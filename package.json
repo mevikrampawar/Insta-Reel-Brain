@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@number-flow/react": "^0.6.2",
     "@tailwindcss/vite": "^4.3.3",
     "@types/cytoscape": "^3.21.9",
     "@types/react-cytoscapejs": "^1.2.6",
@@ -20,6 +21,7 @@
     "react": "^19.2.7",
     "react-cytoscapejs": "^2.0.0",
     "react-dom": "^19.2.7",
+    "react-tiny-sparkline": "^1.1.1",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
