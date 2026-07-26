@@ -1,14 +1,15 @@
 import { useMemo } from 'react'
-import { Bot, Zap, TrendingUp } from 'lucide-react'
+import { Bot, Zap, TrendingUp, ArrowRight } from 'lucide-react'
 import type { Reel } from '../types'
 
 interface Props {
   reels: Reel[]
   apifyApiKey: string
   groqApiKey: string
+  onReelClick?: (reelId: string) => void
 }
 
-export function DataSources({ reels, apifyApiKey, groqApiKey }: Props) {
+export function DataSources({ reels, apifyApiKey, groqApiKey, onReelClick }: Props) {
   const completeReels = useMemo(() => reels.filter(r => r.ingestStatus === 'complete'), [reels])
 
   const stats = useMemo(() => {
@@ -27,7 +28,7 @@ export function DataSources({ reels, apifyApiKey, groqApiKey }: Props) {
   }, [completeReels])
 
   return (
-    <div className="p-6 space-y-6 max-w-3xl mx-auto">
+    <div className="p-4 md:p-6 space-y-6 max-w-3xl mx-auto">
       <div>
         <h2 className="text-xl font-bold">Data Sources</h2>
         <p className="text-sm text-zinc-500 mt-1">Where your reel data came from.</p>
@@ -76,9 +77,16 @@ export function DataSources({ reels, apifyApiKey, groqApiKey }: Props) {
               const total = freeCount + paidCount
 
               return (
-                <div key={reel.id} className="flex items-center gap-3 py-2 border-b border-zinc-800 last:border-0">
+                <button
+                  key={reel.id}
+                  onClick={() => onReelClick?.(reel.id)}
+                  className="w-full flex items-center gap-3 py-2 border-b border-zinc-800 last:border-0 text-left hover:bg-zinc-800/50 -mx-2 px-2 rounded-lg transition-colors group"
+                >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-zinc-200 truncate">{reel.title || 'Untitled'}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm text-zinc-200 truncate group-hover:text-white transition-colors">{reel.title || 'Untitled'}</p>
+                      <ArrowRight size={12} className="text-zinc-600 group-hover:text-indigo-400 shrink-0 opacity-0 group-hover:opacity-100 transition-all" />
+                    </div>
                     <p className="text-xs text-zinc-500">
                       {reelSources.map(s => (
                         <span key={s.source} className={`inline-flex items-center gap-1 mr-2 ${s.source === 'apify' ? 'text-orange-400' : 'text-indigo-400'}`}>
@@ -107,7 +115,7 @@ export function DataSources({ reels, apifyApiKey, groqApiKey }: Props) {
                       />
                     </div>
                   </div>
-                </div>
+                </button>
               )
             })}
           </div>

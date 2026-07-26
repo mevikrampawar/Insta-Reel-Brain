@@ -51,7 +51,7 @@ export function Notes({ notes, reelTitle, onAdd, onUpdate, onDelete }: Props) {
       {/* Notes list */}
       <div className="space-y-2">
         {notes.map(note => (
-          <div key={note.id} className="bg-zinc-800/50 rounded-lg p-3 group">
+          <div key={note.id} className="bg-zinc-800/50 rounded-lg p-3">
             {editingId === note.id ? (
               <div className="flex gap-2">
                 <textarea value={editContent} onChange={e => setEditContent(e.target.value)}
@@ -62,13 +62,13 @@ export function Notes({ notes, reelTitle, onAdd, onUpdate, onDelete }: Props) {
             ) : (
               <>
                 <p className="text-xs text-zinc-300 whitespace-pre-wrap">{note.content}</p>
-                <div className="flex items-center justify-between mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center justify-between mt-2">
                   <span className="text-[10px] text-zinc-600">{new Date(note.createdAt).toLocaleDateString()}</span>
                   <div className="flex gap-2">
                     <button onClick={() => { setEditingId(note.id); setEditContent(note.content) }}
-                      className="text-zinc-600 hover:text-zinc-300"><Edit3 size={10} /></button>
+                      className="text-zinc-500 hover:text-zinc-300 transition-colors"><Edit3 size={11} /></button>
                     <button onClick={() => onDelete(note.id)}
-                      className="text-zinc-600 hover:text-red-400"><Trash2 size={10} /></button>
+                      className="text-zinc-500 hover:text-red-400 transition-colors"><Trash2 size={11} /></button>
                   </div>
                 </div>
               </>

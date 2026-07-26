@@ -1,16 +1,17 @@
-import { useMemo, useRef, useEffect } from 'react'
+import { useMemo, useRef, useEffect, useCallback } from 'react'
 import type { Reel } from '../types'
 
-interface Props { reels: Reel[] }
+interface Props { reels: Reel[]; onReelClick?: (reelId: string) => void }
 
-interface Node { id: string; name: string; type: 'reel' | 'concept'; x: number; y: number; vx: number; vy: number; val: number; color: string }
+interface Node { id: string; name: string; type: 'reel' | 'concept'; reelId?: string; x: number; y: number; vx: number; vy: number; val: number; color: string }
 interface Edge { source: string; target: string; weight: number }
 
 const COLORS = { reel: '#6366f1', topic: '#10b981', skill: '#f59e0b', person: '#ef4444', brand: '#ec4899', tool: '#06b6d4', framework: '#8b5cf6', trend: '#f97316' }
 
-export function NeuralGraph({ reels }: Props) {
+export function NeuralGraph({ reels, onReelClick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const nodesRef = useRef<Node[]>([])
 
   const { nodes, edges } = useMemo(() => {
     const nodes: Node[] = []
@@ -21,7 +22,7 @@ export function NeuralGraph({ reels }: Props) {
 
     for (const reel of completeReels) {
       const rid = `reel-${reel.id}`
-      nodes.push({ id: rid, name: reel.title?.slice(0, 30) || 'Untitled', type: 'reel', x: Math.random() * 800, y: Math.random() * 600, vx: 0, vy: 0, val: 3, color: COLORS.reel })
+      nodes.push({ id: rid, name: reel.title?.slice(0, 30) || 'Untitled', type: 'reel', reelId: reel.id, x: Math.random() * 800, y: Math.random() * 600, vx: 0, vy: 0, val: 3, color: COLORS.reel })
 
       for (const c of reel.concepts || []) {
         const cid = `concept-${c.conceptName}`
@@ -35,7 +36,7 @@ export function NeuralGraph({ reels }: Props) {
       }
     }
 
-    // Add concept-concept edges based on co-occurrence in reels
+    // Concept-concept edges based on co-occurrence
     const conceptEntries = Array.from(conceptMap.entries())
     for (let i = 0; i < conceptEntries.length; i++) {
       for (let j = i + 1; j < conceptEntries.length; j++) {
@@ -43,7 +44,6 @@ export function NeuralGraph({ reels }: Props) {
         const [idB, dataB] = conceptEntries[j]
         const sharedReels = [...dataA.reels].filter(r => dataB.reels.has(r))
         if (sharedReels.length >= 2) {
-          // Weight = Jaccard similarity of shared reels
           const union = new Set([...dataA.reels, ...dataB.reels]).size
           const weight = sharedReels.length / union
           if (weight > 0.2) {
@@ -55,6 +55,26 @@ export function NeuralGraph({ reels }: Props) {
 
     return { nodes, edges }
   }, [reels])
+
+  useEffect(() => { nodesRef.current = nodes }, [nodes])
+
+  // Handle canvas click
+  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current
+    if (!canvas || !onReelClick) return
+    const rect = canvas.getBoundingClientRect()
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width)
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height)
+
+    for (const n of nodesRef.current) {
+      if (n.type !== 'reel' || !n.reelId) continue
+      const r = 10
+      if (Math.abs(n.x - x) < r && Math.abs(n.y - y) < r) {
+        onReelClick(n.reelId)
+        return
+      }
+    }
+  }, [onReelClick])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -81,7 +101,6 @@ export function NeuralGraph({ reels }: Props) {
     let frame: number
 
     const draw = () => {
-      // Force simulation
       for (const e of edges) {
         const s = nodeMap.get(e.source), t = nodeMap.get(e.target)
         if (!s || !t) continue
@@ -92,7 +111,6 @@ export function NeuralGraph({ reels }: Props) {
         t.vx -= (dx / dist) * force; t.vy -= (dy / dist) * force
       }
 
-      // Repulsion between all nodes
       for (const n of nodes) {
         for (const m of nodes) {
           if (n === m) continue
@@ -106,7 +124,6 @@ export function NeuralGraph({ reels }: Props) {
         }
       }
 
-      // Center gravity
       for (const n of nodes) {
         n.vx += (W / 2 - n.x) * 0.0005
         n.vy += (H / 2 - n.y) * 0.0005
@@ -116,10 +133,8 @@ export function NeuralGraph({ reels }: Props) {
         n.y = Math.max(30, Math.min(H - 30, n.y))
       }
 
-      // Draw
       ctx.clearRect(0, 0, W, H)
 
-      // Edges
       for (const e of edges) {
         const s = nodeMap.get(e.source), t = nodeMap.get(e.target)
         if (!s || !t) continue
@@ -129,7 +144,6 @@ export function NeuralGraph({ reels }: Props) {
         ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y); ctx.stroke()
       }
 
-      // Nodes
       ctx.globalAlpha = 1
       for (const n of nodes) {
         const r = n.type === 'reel' ? 8 : 6
@@ -154,7 +168,7 @@ export function NeuralGraph({ reels }: Props) {
 
   return (
     <div ref={containerRef} className="relative w-full h-full">
-      <canvas ref={canvasRef} className="w-full h-full" />
+      <canvas ref={canvasRef} className="w-full h-full cursor-pointer" onClick={handleClick} />
       <div className="absolute bottom-4 left-4 bg-zinc-900/90 border border-zinc-800 rounded-lg p-3 text-xs space-y-1">
         <p className="font-medium text-zinc-300 mb-1">Legend</p>
         {Object.entries(COLORS).map(([k, v]) => (
@@ -164,6 +178,11 @@ export function NeuralGraph({ reels }: Props) {
           </div>
         ))}
       </div>
+      {onReelClick && (
+        <div className="absolute top-4 right-4 bg-zinc-900/90 border border-zinc-800 rounded-lg px-3 py-1.5 text-[10px] text-zinc-500">
+          Click a blue reel node to view it in Library
+        </div>
+      )}
     </div>
   )
 }

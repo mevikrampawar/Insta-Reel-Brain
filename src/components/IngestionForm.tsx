@@ -40,7 +40,7 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
 
   if (!apiKey) {
     return (
-      <div className="max-w-2xl mx-auto p-8">
+      <div className="max-w-2xl mx-auto p-4 md:p-8">
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-6 text-center space-y-3">
           <AlertCircle className="mx-auto text-amber-400" size={32} />
           <h3 className="font-medium text-amber-300">Groq API Key Required</h3>
@@ -54,7 +54,7 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
   const doneCount = jobs.filter(j => j.phase === 'complete').length
 
   return (
-    <div className="max-w-2xl mx-auto p-8 space-y-6">
+    <div className="max-w-2xl mx-auto p-4 md:p-8 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center"><Video size={20} /></div>

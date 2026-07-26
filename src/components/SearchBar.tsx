@@ -51,9 +51,10 @@ export function SearchBar({ reels, onResults }: Props) {
       <button
         onClick={handleSearch}
         disabled={loading || !query.trim()}
-        className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+        className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
       >
-        {loading ? <Loader2 size={14} className="animate-spin" /> : 'Search'}
+        {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+        <span className="hidden sm:inline">Search</span>
       </button>
     </div>
   )

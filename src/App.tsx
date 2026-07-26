@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useAuth } from './hooks/useAuth'
 import { useReels } from './hooks/useReels'
 import { useCollections } from './hooks/useCollections'
 import { useScrapeQueue } from './hooks/useScrapeQueue'
 import { ApiKeyProvider, useApiKey } from './hooks/ApiKeyContext'
 import { Login } from './components/Login'
-import { Layout } from './components/Layout'
+import { Layout, type NavState } from './components/Layout'
 import { Library } from './components/Library'
 import { IngestionForm } from './components/IngestionForm'
 import { NeuralGraph } from './components/NeuralGraph'
@@ -19,37 +19,59 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
   const { collections, addCollection, deleteCollection, addReelToCollection } = useCollections(user.uid)
   const { apiKey, apifyApiKey } = useApiKey()
   const { jobs, addJob, removeJob } = useScrapeQueue(apifyApiKey, apiKey, addReel, updateReel)
-  const [tab, setTab] = useState('library')
+  const [nav, setNav] = useState<NavState>({ tab: 'library' })
+
+  const navigateToReel = useCallback((reelId: string) => {
+    setNav({ tab: 'library', highlightReelId: reelId })
+  }, [])
+
+  const clearHighlight = useCallback(() => {
+    setNav(prev => ({ ...prev, highlightReelId: undefined }))
+  }, [])
 
   return (
-    <Layout activeTab={tab} onTabChange={setTab} onLogout={logout} userPhoto={user.photoURL || undefined}>
-      {reelsLoading && tab === 'library' && (
+    <Layout nav={nav} onNavChange={setNav} onLogout={logout} userPhoto={user.photoURL || undefined}>
+      {reelsLoading && nav.tab === 'library' && (
         <div className="flex items-center justify-center h-full">
           <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
         </div>
       )}
-      {!reelsLoading && tab === 'library' && (
-        <Library reels={reels} onDelete={deleteReel} collections={collections} userId={user.uid} onAddToCollection={(reelId, collectionId) => addReelToCollection(collectionId, reelId)} />
+      {!reelsLoading && nav.tab === 'library' && (
+        <Library
+          reels={reels}
+          onDelete={deleteReel}
+          collections={collections}
+          userId={user.uid}
+          onAddToCollection={(reelId, collectionId) => addReelToCollection(collectionId, reelId)}
+          highlightReelId={nav.highlightReelId}
+          onClearHighlight={clearHighlight}
+        />
       )}
-      {tab === 'ingest' && (
+      {nav.tab === 'ingest' && (
         <IngestionForm
           jobs={jobs}
           addJob={addJob}
           removeJob={removeJob}
           apiKey={apiKey}
           apifyApiKey={apifyApiKey}
-          onSwitchToLibrary={() => setTab('library')}
+          onSwitchToLibrary={() => setNav({ tab: 'library' })}
         />
       )}
-      {tab === 'chat' && <Chat reels={reels} apiKey={apiKey} />}
-      {tab === 'graph' && <NeuralGraph reels={reels} />}
-      {tab === 'collections' && (
-        <Collections collections={collections} reels={reels} onAdd={addCollection} onDelete={deleteCollection} />
+      {nav.tab === 'chat' && <Chat reels={reels} apiKey={apiKey} />}
+      {nav.tab === 'graph' && <NeuralGraph reels={reels} onReelClick={navigateToReel} />}
+      {nav.tab === 'collections' && (
+        <Collections
+          collections={collections}
+          reels={reels}
+          onAdd={addCollection}
+          onDelete={deleteCollection}
+          onReelClick={navigateToReel}
+        />
       )}
-      {tab === 'datasources' && (
-        <DataSources reels={reels} apifyApiKey={apifyApiKey} groqApiKey={apiKey} />
+      {nav.tab === 'datasources' && (
+        <DataSources reels={reels} apifyApiKey={apifyApiKey} groqApiKey={apiKey} onReelClick={navigateToReel} />
       )}
-      {tab === 'settings' && <Settings userId={user.uid} />}
+      {nav.tab === 'settings' && <Settings userId={user.uid} />}
     </Layout>
   )
 }

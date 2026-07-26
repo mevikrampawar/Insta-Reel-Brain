@@ -98,7 +98,7 @@ export function Settings({ userId }: Props) {
   if (loading) return <div className="p-8 flex items-center justify-center"><div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>
 
   return (
-    <div className="max-w-2xl mx-auto p-8 space-y-6">
+    <div className="max-w-2xl mx-auto p-4 md:p-8 space-y-6">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center"><SettingsIcon size={20} className="text-zinc-400" /></div>
         <div><h2 className="text-2xl font-bold">Settings</h2><p className="text-sm text-zinc-500">Configure API keys</p></div>

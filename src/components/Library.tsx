@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Download, BarChart3, BookOpen, Tag, XCircle } from 'lucide-react'
 import type { Reel, Collection, SearchResult } from '../types'
 import { ReelCard } from './ReelCard'
@@ -11,13 +11,17 @@ interface Props {
   collections: Collection[]
   userId: string
   onAddToCollection: (reelId: string, collectionId: string) => void
+  highlightReelId?: string
+  onClearHighlight?: () => void
 }
 
-export function Library({ reels, onDelete, collections, userId, onAddToCollection }: Props) {
+export function Library({ reels, onDelete, collections, userId, onAddToCollection, highlightReelId, onClearHighlight }: Props) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [filter, setFilter] = useState<'all' | 'complete' | 'processing' | 'failed'>('all')
   const [collectionFilter, setCollectionFilter] = useState<string>('all')
   const [showStats, setShowStats] = useState(false)
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const reelRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   const displayReels = useMemo(() => {
     const base = searchResults.length > 0 ? searchResults.map(r => r.reel) : reels
@@ -40,22 +44,37 @@ export function Library({ reels, onDelete, collections, userId, onAddToCollectio
     concepts: [...new Set(reels.flatMap(r => r.concepts?.map(c => c.conceptName) || []))].length,
   }), [reels])
 
+  // Scroll to + highlight the incoming reel
+  useEffect(() => {
+    if (!highlightReelId) return
+    // Small delay so the DOM has rendered
+    const timer = setTimeout(() => {
+      const el = reelRefs.current.get(highlightReelId)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+      // Auto-clear highlight after 3s
+      highlightTimerRef.current = setTimeout(() => onClearHighlight?.(), 3000)
+    }, 100)
+    return () => { clearTimeout(timer); clearTimeout(highlightTimerRef.current) }
+  }, [highlightReelId, onClearHighlight])
+
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 md:p-6 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold">Library</h2>
           <p className="text-sm text-zinc-500">
-            {stats.total} reels • {stats.complete} analyzed
-            {stats.failed > 0 && <span className="text-red-400"> • {stats.failed} failed</span>}
+            {stats.total} reels · {stats.complete} analyzed
+            {stats.failed > 0 && <span className="text-red-400"> · {stats.failed} failed</span>}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => downloadCSV(reels)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-lg transition-colors">
             <Download size={12} /> CSV
           </button>
-          <button onClick={() => downloadJSON(reels)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-lg transition-colors">
+          <button onClick={() => downloadJSON(reels)} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-lg transition-colors">
             <Download size={12} /> JSON
           </button>
           <button onClick={() => setShowStats(!showStats)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-lg transition-colors">
@@ -66,7 +85,7 @@ export function Library({ reels, onDelete, collections, userId, onAddToCollectio
 
       {/* Stats */}
       {showStats && (
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
             { label: 'Total', value: stats.total, icon: BookOpen },
             { label: 'Analyzed', value: stats.complete, icon: BarChart3 },
@@ -118,21 +137,29 @@ export function Library({ reels, onDelete, collections, userId, onAddToCollectio
 
       <div className="grid gap-3">
         {displayReels.map(reel => (
-          <ReelCard
+          <div
             key={reel.id}
-            reel={reel}
-            userId={userId}
-            onDelete={onDelete}
-            collections={collections}
-            onAddToCollection={onAddToCollection}
-          />
+            ref={el => { if (el) reelRefs.current.set(reel.id, el) }}
+            className={`transition-all duration-500 ${highlightReelId === reel.id ? 'ring-2 ring-indigo-500 ring-offset-2 ring-offset-zinc-950 rounded-xl' : ''}`}
+          >
+            <ReelCard
+              reel={reel}
+              userId={userId}
+              onDelete={onDelete}
+              collections={collections}
+              onAddToCollection={onAddToCollection}
+            />
+          </div>
         ))}
         {displayReels.length === 0 && (
           <div className="text-center py-12 text-zinc-500">
             <BookOpen size={32} className="mx-auto mb-3 opacity-50" />
             <p className="text-sm">
-              {reels.length === 0 ? 'No reels yet. Click "Add Reel" to get started.' : 'No results found.'}
+              {reels.length === 0 ? 'No reels yet.' : 'No results found.'}
             </p>
+            {reels.length === 0 && (
+              <p className="text-xs mt-1 text-zinc-600">Click "Add" to paste your first Instagram Reel URL.</p>
+            )}
           </div>
         )}
       </div>

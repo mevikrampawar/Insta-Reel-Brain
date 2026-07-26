@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, FolderOpen, Trash2, ChevronRight, X, Tag } from 'lucide-react'
+import { Plus, FolderOpen, Trash2, ChevronRight, X, Tag, ArrowRight } from 'lucide-react'
 import type { Collection, Reel } from '../types'
 
 interface Props {
@@ -7,11 +7,12 @@ interface Props {
   reels: Reel[]
   onAdd: (data: Partial<Collection>) => Promise<void>
   onDelete: (id: string) => Promise<void>
+  onReelClick?: (reelId: string) => void
 }
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#8b5cf6']
 
-export function Collections({ collections, reels, onAdd, onDelete }: Props) {
+export function Collections({ collections, reels, onAdd, onDelete, onReelClick }: Props) {
   const [showNew, setShowNew] = useState(false)
   const [name, setName] = useState('')
   const [desc, setDesc] = useState('')
@@ -25,7 +26,7 @@ export function Collections({ collections, reels, onAdd, onDelete }: Props) {
   }
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold">Collections</h2>
@@ -33,7 +34,7 @@ export function Collections({ collections, reels, onAdd, onDelete }: Props) {
         </div>
         <button onClick={() => setShowNew(true)}
           className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
-          <Plus size={14} /> New Collection
+          <Plus size={14} /> New
         </button>
       </div>
 
@@ -73,28 +74,38 @@ export function Collections({ collections, reels, onAdd, onDelete }: Props) {
             <div key={c.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
               <div className="flex items-center gap-3 p-4 cursor-pointer hover:bg-zinc-800/50 transition-colors"
                 onClick={() => setExpandedId(isExpanded ? null : c.id)}>
-                <div className="w-3 h-3 rounded-full" style={{ background: c.color }} />
-                <FolderOpen size={16} className="text-zinc-400" />
-                <div className="flex-1">
+                <div className="w-3 h-3 rounded-full shrink-0" style={{ background: c.color }} />
+                <FolderOpen size={16} className="text-zinc-400 shrink-0" />
+                <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm">{c.name}</p>
-                  {c.description && <p className="text-xs text-zinc-500">{c.description}</p>}
+                  {c.description && <p className="text-xs text-zinc-500 truncate">{c.description}</p>}
                 </div>
-                <span className="text-xs text-zinc-500">{reelCount} reels</span>
-                <ChevronRight size={14} className={`text-zinc-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                <span className="text-xs text-zinc-500 shrink-0">{reelCount} reels</span>
+                <ChevronRight size={14} className={`text-zinc-500 transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}`} />
                 <button onClick={(e) => { e.stopPropagation(); onDelete(c.id) }}
-                  className="text-zinc-600 hover:text-red-400 transition-colors">
+                  className="text-zinc-600 hover:text-red-400 transition-colors shrink-0">
                   <Trash2 size={14} />
                 </button>
               </div>
               {isExpanded && collectionReels.length > 0 && (
-                <div className="border-t border-zinc-800 p-3 space-y-2">
+                <div className="border-t border-zinc-800 p-3 space-y-1">
                   {collectionReels.map(r => (
-                    <div key={r.id} className="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 rounded-lg text-xs">
-                      <Tag size={10} className="text-zinc-500" />
-                      <span className="truncate">{r.title || 'Untitled'}</span>
-                      <span className="text-zinc-600 ml-auto">@{r.creatorHandle}</span>
-                    </div>
+                    <button
+                      key={r.id}
+                      onClick={() => onReelClick?.(r.id)}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs hover:bg-zinc-800/50 transition-colors text-left group"
+                    >
+                      <Tag size={10} className="text-zinc-500 shrink-0" />
+                      <span className="truncate flex-1 text-zinc-300 group-hover:text-white transition-colors">{r.title || 'Untitled'}</span>
+                      <span className="text-zinc-600 shrink-0">@{r.creatorHandle}</span>
+                      <ArrowRight size={10} className="text-zinc-600 group-hover:text-indigo-400 shrink-0 opacity-0 group-hover:opacity-100 transition-all" />
+                    </button>
                   ))}
+                </div>
+              )}
+              {isExpanded && collectionReels.length === 0 && (
+                <div className="border-t border-zinc-800 p-4 text-center text-xs text-zinc-500">
+                  No reels in this collection yet.
                 </div>
               )}
             </div>
@@ -103,7 +114,8 @@ export function Collections({ collections, reels, onAdd, onDelete }: Props) {
         {collections.length === 0 && (
           <div className="text-center py-12 text-zinc-500">
             <FolderOpen size={32} className="mx-auto mb-3 opacity-50" />
-            <p className="text-sm">No collections yet. Create one to organize your Reels.</p>
+            <p className="text-sm">No collections yet.</p>
+            <p className="text-xs mt-1 text-zinc-600">Create one to organize your Reels.</p>
           </div>
         )}
       </div>
