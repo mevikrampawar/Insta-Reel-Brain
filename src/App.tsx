@@ -32,9 +32,9 @@ function getInitialTab(): string {
 
 function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAuth>['user']>; logout: () => void }) {
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel, deleteReelsBulk } = useReels(user.uid)
-  const { collections, addCollection, deleteCollection, addReelToCollection, autoAssignCollections, retroactiveAutoAssign } = useCollections(user.uid)
+  const { collections, addCollection, deleteCollection, renameCollection, addReelToCollection, removeReelFromCollection, mergeCollections, assignReelsByCategory } = useCollections(user.uid)
   const { apiKey, apifyApiKey } = useApiKey()
-  const { jobs, addJob, removeJob } = useScrapeQueue(apifyApiKey, apiKey, addReel, updateReel, autoAssignCollections)
+  const { jobs, addJob, removeJob } = useScrapeQueue(apifyApiKey, apiKey, addReel, updateReel, assignReelsByCategory)
   const [nav, setNav] = useState<NavState>({ tab: getInitialTab() })
 
   // Persist tab to localStorage + URL hash
@@ -68,12 +68,10 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
     const completeReels = reels.filter(r => r.ingestStatus === 'complete')
     const reelData = completeReels.map(r => ({
       id: r.id,
-      suggestedTags: r.suggestedTags || [],
-      concepts: r.concepts || [],
-      contentCategory: r.contentCategory,
+      primaryCategory: r.primaryCategory,
     }))
-    return retroactiveAutoAssign(reelData)
-  }, [reels, retroactiveAutoAssign])
+    return assignReelsByCategory(reelData)
+  }, [reels, assignReelsByCategory])
 
   const handleReAnalyze = useCallback(async (ids: string[]) => {
     for (const id of ids) {
@@ -130,6 +128,10 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           reels={reels}
           onAdd={addCollection}
           onDelete={deleteCollection}
+          onRename={renameCollection}
+          onMerge={mergeCollections}
+          onAddReel={addReelToCollection}
+          onRemoveReel={removeReelFromCollection}
           onReelClick={navigateToReel}
           onRetroactiveAutoAssign={handleRetroactiveAutoAssign}
         />

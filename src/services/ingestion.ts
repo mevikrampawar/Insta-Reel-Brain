@@ -1,5 +1,5 @@
 import type { Reel } from '../types'
-import { analyzeReel, extractMetadataFromText } from './groq'
+import { analyzeReel, classifyReelCategory, extractMetadataFromText } from './groq'
 
 export interface ReelAnalysis {
   summary: string
@@ -10,6 +10,7 @@ export interface ReelAnalysis {
   language: string
   entities: { name: string; type: string }[]
   contentCategory: string
+  primaryCategory: string
   sentiment: string
   targetAudience: string
 }
@@ -55,6 +56,15 @@ export async function processReel(
     onProgress?.('Analyzing content with AI...')
     const analysis = await analyzeReel(apiKey, transcript, metadata)
 
+    onProgress?.('Classifying into category...')
+    const primaryCategory = await classifyReelCategory(
+      apiKey,
+      analysis.summary,
+      analysis.suggestedTags,
+      analysis.entities,
+      analysis.contentCategory,
+    )
+
     const searchableText = [
       analysis.summary,
       ...analysis.keyTakeaways,
@@ -78,6 +88,7 @@ export async function processReel(
       language: analysis.language,
       entities: analysis.entities || [],
       contentCategory: analysis.contentCategory || 'other',
+      primaryCategory,
       sentiment: analysis.sentiment || 'neutral',
       targetAudience: analysis.targetAudience || '',
       ingestedAt: Date.now(),
@@ -92,6 +103,7 @@ export async function processReel(
       language: analysis.language,
       entities: analysis.entities || [],
       contentCategory: analysis.contentCategory || 'other',
+      primaryCategory,
       sentiment: analysis.sentiment || 'neutral',
       targetAudience: analysis.targetAudience || '',
     }

@@ -33,23 +33,21 @@ export function NeuralGraph({ reels, collections, onReelClick }: Props) {
 
     const completeReels = reels.filter(r => r.ingestStatus === 'complete')
 
-    // Build collection membership map: reelId → collection names
-    const reelCollections = new Map<string, string[]>()
-    for (const col of collections) {
-      for (const rid of (col.reelIds || [])) {
-        const existing = reelCollections.get(rid) || []
-        existing.push(col.name)
-        reelCollections.set(rid, existing)
+    // Build reel → primaryCategory map
+    const reelCategory = new Map<string, string>()
+    for (const reel of completeReels) {
+      if (reel.primaryCategory) {
+        reelCategory.set(reel.id, reel.primaryCategory)
       }
     }
 
-    // Create cluster centers from collections
-    const collectionNames = [...new Set(collections.map(c => c.name))]
+    // Create cluster centers from unique primaryCategories
+    const categoryNames = [...new Set(completeReels.map(r => r.primaryCategory).filter(Boolean))]
     const clusterCenters = new Map<string, { x: number; y: number }>()
-    const angleStep = (Math.PI * 2) / Math.max(collectionNames.length, 1)
+    const angleStep = (Math.PI * 2) / Math.max(categoryNames.length, 1)
     const clusterRadius = 250
-    collectionNames.forEach((name, i) => {
-      clusterCenters.set(name, {
+    categoryNames.forEach((name, i) => {
+      clusterCenters.set(name!, {
         x: Math.cos(angleStep * i) * clusterRadius,
         y: Math.sin(angleStep * i) * clusterRadius,
       })
@@ -60,8 +58,8 @@ export function NeuralGraph({ reels, collections, onReelClick }: Props) {
 
     for (const reel of completeReels) {
       const rid = `reel-${reel.id}`
-      const colNames = reelCollections.get(reel.id) || []
-      const cluster = colNames.length > 0 ? clusterCenters.get(colNames[0]) || centerCluster : centerCluster
+      const cat = reelCategory.get(reel.id)
+      const cluster = cat ? clusterCenters.get(cat) || centerCluster : centerCluster
 
       nodes.push({
         id: rid, name: reel.title?.slice(0, 25) || 'Untitled', type: 'reel', reelId: reel.id,
@@ -388,16 +386,16 @@ export function NeuralGraph({ reels, collections, onReelClick }: Props) {
       // Draw cluster backgrounds
       for (const [name, center] of clusterCenters) {
         const col = collections.find(c => c.name === name)
-        if (!col) continue
+        const colColor = col?.color || '#6366f1'
         ctx.globalAlpha = 0.04
-        ctx.fillStyle = col.color || '#6366f1'
+        ctx.fillStyle = colColor
         ctx.beginPath()
         ctx.arc(center.x, center.y, 180, 0, Math.PI * 2)
         ctx.fill()
 
         // Cluster label
         ctx.globalAlpha = 0.2
-        ctx.fillStyle = col.color || '#6366f1'
+        ctx.fillStyle = colColor
         ctx.font = 'bold 12px Inter, sans-serif'
         ctx.textAlign = 'center'
         ctx.fillText(name, center.x, center.y - 190)

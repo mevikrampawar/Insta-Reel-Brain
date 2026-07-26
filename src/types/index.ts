@@ -27,6 +27,7 @@ export interface Reel {
   language: string
   entities: { name: string; type: string }[]
   contentCategory: string
+  primaryCategory: string
   sentiment: string
   targetAudience: string
   dataSources: DataSourceRecord[]

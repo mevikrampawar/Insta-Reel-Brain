@@ -185,6 +185,58 @@ export async function chatWithLibrary(
   ], { temperature: 0.3, max_tokens: 2000 })
 }
 
+export const MAJOR_CATEGORIES = [
+  'AI & Technology',
+  'Fitness & Health',
+  'Business & Marketing',
+  'Programming & Development',
+  'Productivity & Self-improvement',
+  'Finance & Investing',
+  'Creative & Design',
+  'Education & Learning',
+  'Lifestyle & Entertainment',
+  'Food & Cooking',
+] as const
+
+export async function classifyReelCategory(
+  apiKey: string,
+  summary: string,
+  tags: string[],
+  entities: { name: string; type: string }[],
+  contentCategory: string,
+): Promise<string> {
+  const raw = await callGroq(apiKey, [
+    {
+      role: 'system',
+      content: `You are a content classifier. Classify content into exactly ONE of these categories: ${MAJOR_CATEGORIES.join(', ')}. Respond with ONLY the category name, nothing else.`,
+    },
+    {
+      role: 'user',
+      content: `Classify this content into exactly ONE category.
+
+Summary: ${summary.slice(0, 500)}
+Tags: ${tags.slice(0, 10).join(', ')}
+Entities: ${entities.slice(0, 10).map(e => `${e.name} (${e.type})`).join(', ')}
+Content type: ${contentCategory}
+
+Respond with ONLY one of: ${MAJOR_CATEGORIES.join(', ')}`,
+    },
+  ], { temperature: 0.1, max_tokens: 50 })
+
+  const cleaned = raw.trim().replace(/^["']|["']$/g, '')
+  if (MAJOR_CATEGORIES.includes(cleaned as typeof MAJOR_CATEGORIES[number])) {
+    return cleaned
+  }
+  // Fallback: find closest match
+  const lower = cleaned.toLowerCase()
+  for (const cat of MAJOR_CATEGORIES) {
+    if (cat.toLowerCase().includes(lower) || lower.includes(cat.toLowerCase().split(' ')[0])) {
+      return cat
+    }
+  }
+  return 'Education & Learning'
+}
+
 export async function extractMetadataFromText(
   apiKey: string,
   url: string,
