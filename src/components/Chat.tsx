@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Send, Loader2, BookOpen, AlertCircle, Trash2, Hash, Lightbulb } from 'lucide-react'
 import type { Reel } from '../types'
 import { chatWithLibrary } from '../services/groq'
@@ -41,26 +41,19 @@ export function Chat({ reels, apiKey }: Props) {
   const completeReels = reels.filter(r => r.ingestStatus === 'complete')
 
   // Dynamic suggestion chips based on library content
-  const suggestions = useCallback(() => {
+  const suggestions = useMemo(() => {
     const chips: string[] = []
-    // Top tags
     const tagCounts = new Map<string, number>()
     completeReels.forEach(r => r.suggestedTags?.forEach(t => tagCounts.set(t, (tagCounts.get(t) || 0) + 1)))
     const topTags = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
     if (topTags.length > 0) chips.push(`Tell me about ${topTags[0][0]}`)
     if (topTags.length > 1) chips.push(`How does ${topTags[1][0]} relate to ${topTags[0][0]}?`)
 
-    // Top entities
     const entityCounts = new Map<string, number>()
     completeReels.forEach(r => r.entities?.forEach(e => entityCounts.set(e.name, (entityCounts.get(e.name) || 0) + 1)))
     const topEntities = [...entityCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2)
     if (topEntities.length > 0) chips.push(`What do I know about ${topEntities[0][0]}?`)
 
-    // Content categories
-    const cats = new Set(completeReels.map(r => r.contentCategory).filter(Boolean))
-    if (cats.size > 0) chips.push(`What are my most common content types?`)
-
-    // Always have a fallback
     if (chips.length < 3) chips.push('Summarize my saved Reels')
     if (chips.length < 3) chips.push('What action items should I prioritize?')
     return chips.slice(0, 4)
@@ -147,7 +140,7 @@ export function Chat({ reels, apiKey }: Props) {
             <BookOpen size={32} className="mx-auto text-zinc-600" />
             <p className="text-zinc-400 text-sm">Ask anything about your saved Reels</p>
             <div className="flex flex-wrap justify-center gap-2 max-w-md mx-auto">
-              {suggestions().map(q => (
+              {suggestions.map(q => (
                 <button key={q} onClick={() => handleSend(q)}
                   className="px-3 min-h-[40px] bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs text-zinc-400 hover:text-white transition-colors flex items-center gap-1.5">
                   <Lightbulb size={12} className="text-amber-400 shrink-0" />

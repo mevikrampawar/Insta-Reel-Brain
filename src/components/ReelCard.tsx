@@ -180,12 +180,9 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
               <Music size={10} className="shrink-0" /> <span className="truncate max-w-[100px]">{reel.audioTrack}</span>
             </span>
           )}
-          {/* Quality Score */}
-          {reel.ingestStatus === 'complete' && (
-            <span className={`flex items-center gap-1 text-[11px] ${getQualityColor(computeQualityScore(reel).overall)}`}>
+          <span className={`flex items-center gap-1 text-[11px] ${getQualityColor(computeQualityScore(reel).overall)}`}>
               <Star size={10} className="shrink-0" /> {getQualityLabel(computeQualityScore(reel).overall)}
             </span>
-          )}
           {/* Content Category */}
           {reel.contentCategory && reel.contentCategory !== 'other' && (
             <span className="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded text-[10px] capitalize">{reel.contentCategory}</span>

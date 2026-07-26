@@ -377,9 +377,12 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
           ctx.lineTo(n.x - r, n.y)
           ctx.closePath()
         } else if (isEntity) {
-          // Rounded square for entities
           const s = r * 0.85
-          ctx.roundRect(n.x - s, n.y - s, s * 2, s * 2, 3)
+          if (ctx.roundRect) {
+            ctx.roundRect(n.x - s, n.y - s, s * 2, s * 2, 3)
+          } else {
+            ctx.rect(n.x - s, n.y - s, s * 2, s * 2)
+          }
         } else {
           ctx.arc(n.x, n.y, r, 0, Math.PI * 2)
         }

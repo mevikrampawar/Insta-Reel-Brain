@@ -1,6 +1,17 @@
 import type { Reel, SearchResult } from '../types'
 import { buildTfIdfIndex, tfidfSearch, reelToText } from './tfidf'
 
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function getSnippet(hay: string, firstTerm: string): string {
+  const i = hay.indexOf(firstTerm)
+  if (i < 0) return hay.slice(0, 120)
+  const s = Math.max(0, i - 50)
+  return (s > 0 ? '...' : '') + hay.slice(s, s + 120) + '...'
+}
+
 export function keywordSearch(reels: Reel[], q: string): SearchResult[] {
   const terms = q.toLowerCase().split(/\s+/).filter(Boolean)
   return reels
@@ -9,8 +20,13 @@ export function keywordSearch(reels: Reel[], q: string): SearchResult[] {
       const hay = [reel.title, reel.caption, reel.summary, reel.transcript, reel.creatorHandle, ...reel.suggestedTags, ...reel.keyTakeaways]
         .filter(Boolean).join(' ').toLowerCase()
       let score = 0
-      for (const t of terms) { const m = hay.match(new RegExp(t, 'gi')); if (m) score += m.length / terms.length }
-      const snippet = (() => { const i = hay.indexOf(terms[0]); if (i < 0) return hay.slice(0, 120); const s = Math.max(0, i - 50); return (s > 0 ? '...' : '') + hay.slice(s, s + 120) + '...' })()
+      for (const t of terms) {
+        try {
+          const m = hay.match(new RegExp(escapeRegex(t), 'gi'))
+          if (m) score += m.length / terms.length
+        } catch { /* skip bad regex */ }
+      }
+      const snippet = getSnippet(hay, terms[0] || '')
       return { reel, score, matchType: 'keyword' as const, snippet }
     })
     .filter(r => r.score > 0)

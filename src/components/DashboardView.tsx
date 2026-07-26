@@ -222,24 +222,26 @@ export function DashboardView({ reels, collections, onReelClick }: Props) {
             <p className="text-xs text-zinc-600">No data yet</p>
           ) : (
             <div className="space-y-2">
-              {sentimentBreakdown.map(([sent, count]) => {
-                const color = sent === 'positive' ? 'bg-emerald-500/60'
-                  : sent === 'negative' ? 'bg-red-500/60'
-                  : 'bg-zinc-500/60'
+              {(() => {
                 const maxSent = Math.max(...sentimentBreakdown.map(s => s[1]))
-                return (
-                  <div key={sent} className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-400 w-20 truncate capitalize">{sent}</span>
-                    <div className="flex-1 h-5 bg-zinc-800 rounded overflow-hidden">
-                      <div
-                        className={`h-full ${color} rounded transition-all`}
-                        style={{ width: `${(count / maxSent) * 100}%` }}
-                      />
+                return sentimentBreakdown.map(([sent, count]) => {
+                  const color = sent === 'positive' ? 'bg-emerald-500/60'
+                    : sent === 'negative' ? 'bg-red-500/60'
+                    : 'bg-zinc-500/60'
+                  return (
+                    <div key={sent} className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-400 w-20 truncate capitalize">{sent}</span>
+                      <div className="flex-1 h-5 bg-zinc-800 rounded overflow-hidden">
+                        <div
+                          className={`h-full ${color} rounded transition-all`}
+                          style={{ width: `${(count / maxSent) * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-[11px] text-zinc-500 w-6 text-right">{count}</span>
                     </div>
-                    <span className="text-[11px] text-zinc-500 w-6 text-right">{count}</span>
-                  </div>
-                )
-              })}
+                  )
+                })
+              })()}
             </div>
           )}
         </div>

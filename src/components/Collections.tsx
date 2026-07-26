@@ -24,8 +24,11 @@ export function Collections({ collections, reels, onAdd, onDelete, onReelClick, 
 
   const handleCreate = async () => {
     if (!name.trim()) return
-    await onAdd({ name: name.trim(), description: desc.trim(), color })
-    setName(''); setDesc(''); setShowNew(false)
+    try {
+      await onAdd({ name: name.trim(), description: desc.trim(), color })
+    } finally {
+      setName(''); setDesc(''); setShowNew(false)
+    }
   }
 
   return (

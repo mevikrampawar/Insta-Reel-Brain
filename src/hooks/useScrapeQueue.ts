@@ -41,7 +41,8 @@ export function useScrapeQueue(
   }, [])
 
   const pollOnce = useCallback(async (job: ScrapeJob): Promise<boolean> => {
-    const { status, datasetId } = await pollApifyRun(apifyApiKey, job.runId!)
+    if (!job.runId) return false
+    const { status, datasetId } = await pollApifyRun(apifyApiKey, job.runId)
 
     if (status === 'SUCCEEDED' && datasetId) {
       const { result, sources } = await fetchApifyDataset(apifyApiKey, datasetId)
@@ -123,7 +124,7 @@ export function useScrapeQueue(
     }
 
     return false
-  }, [apifyApiKey, groqApiKey, addReel, updateReel, patch, remove])
+  }, [apifyApiKey, groqApiKey, addReel, updateReel, patch, remove, autoAssignCollections])
 
   useEffect(() => {
     for (const job of jobs) {
