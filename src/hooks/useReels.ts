@@ -44,5 +44,13 @@ export function useReels(userId: string | undefined) {
     await fetch()
   }, [userId, fetch])
 
-  return { reels, loading, addReel, updateReel, deleteReel }
+  const deleteReelsBulk = useCallback(async (ids: string[]) => {
+    if (!userId) return
+    for (const id of ids) {
+      await deleteDoc(doc(db, 'users', userId, 'reels', id))
+    }
+    await fetch()
+  }, [userId, fetch])
+
+  return { reels, loading, addReel, updateReel, deleteReel, deleteReelsBulk }
 }

@@ -4,6 +4,7 @@ import { useReels } from './hooks/useReels'
 import { useCollections } from './hooks/useCollections'
 import { useScrapeQueue } from './hooks/useScrapeQueue'
 import { ApiKeyProvider, useApiKey } from './hooks/ApiKeyContext'
+import { processReel } from './services/ingestion'
 import { Login } from './components/Login'
 import { Layout, type NavState } from './components/Layout'
 import { Library } from './components/Library'
@@ -13,8 +14,9 @@ import { Chat } from './components/Chat'
 import { Collections } from './components/Collections'
 import { Settings } from './components/Settings'
 import { DataSources } from './components/DataSources'
+import { DashboardView } from './components/DashboardView'
 
-const VALID_TABS = ['library', 'ingest', 'chat', 'graph', 'collections', 'datasources', 'settings']
+const VALID_TABS = ['dashboard', 'library', 'ingest', 'chat', 'graph', 'collections', 'datasources', 'settings']
 
 function getInitialTab(): string {
   // 1. Check URL hash
@@ -25,11 +27,11 @@ function getInitialTab(): string {
     const stored = localStorage.getItem('reelbrain-tab')
     if (stored && VALID_TABS.includes(stored)) return stored
   } catch { /* ignore */ }
-  return 'library'
+  return 'dashboard'
 }
 
 function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAuth>['user']>; logout: () => void }) {
-  const { reels, loading: reelsLoading, addReel, updateReel, deleteReel } = useReels(user.uid)
+  const { reels, loading: reelsLoading, addReel, updateReel, deleteReel, deleteReelsBulk } = useReels(user.uid)
   const { collections, addCollection, deleteCollection, addReelToCollection, autoAssignCollections, retroactiveAutoAssign } = useCollections(user.uid)
   const { apiKey, apifyApiKey } = useApiKey()
   const { jobs, addJob, removeJob } = useScrapeQueue(apifyApiKey, apiKey, addReel, updateReel, autoAssignCollections)
@@ -72,8 +74,25 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
     return retroactiveAutoAssign(reelData)
   }, [reels, retroactiveAutoAssign])
 
+  const handleReAnalyze = useCallback(async (ids: string[]) => {
+    for (const id of ids) {
+      const reel = reels.find(r => r.id === id)
+      if (!reel) continue
+      await processReel(apiKey, {
+        url: reel.url,
+        transcript: reel.transcript || reel.caption || '',
+        title: reel.title,
+        creatorHandle: reel.creatorHandle,
+        caption: reel.caption,
+        hashtags: reel.hashtags,
+        thumbnailUrl: reel.thumbnailUrl,
+      }, id, updateReel)
+    }
+  }, [reels, apiKey, updateReel])
+
   return (
     <Layout nav={nav} onNavChange={handleNavChange} onLogout={logout} userPhoto={user.photoURL || undefined}>
+      {nav.tab === 'dashboard' && <DashboardView reels={reels} collections={collections} onReelClick={navigateToReel} />}
       {reelsLoading && nav.tab === 'library' && (
         <div className="flex items-center justify-center h-full">
           <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -83,11 +102,13 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
         <Library
           reels={reels}
           onDelete={deleteReel}
+          onDeleteBulk={deleteReelsBulk}
           collections={collections}
           userId={user.uid}
           onAddToCollection={(reelId, collectionId) => addReelToCollection(collectionId, reelId)}
           highlightReelId={nav.highlightReelId}
           onClearHighlight={clearHighlight}
+          onReAnalyze={handleReAnalyze}
         />
       )}
       {nav.tab === 'ingest' && (
