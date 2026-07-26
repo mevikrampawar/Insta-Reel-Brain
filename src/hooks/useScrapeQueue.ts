@@ -24,7 +24,7 @@ export function useScrapeQueue(
   groqApiKey: string,
   addReel: (data: Partial<Reel>) => Promise<string | undefined>,
   updateReel: (id: string, data: Partial<Reel>) => Promise<void>,
-  autoAssignCollections?: (reelId: string, tags: string[], concepts: { conceptName: string; conceptType: string }[]) => Promise<void>,
+  autoAssignCollections?: (reelId: string, tags: string[], concepts: { conceptName: string; conceptType: string }[], contentCategory?: string) => Promise<void>,
 ) {
   const [jobs, setJobs] = useState<ScrapeJob[]>([])
   const mounted = useRef(true)
@@ -107,7 +107,7 @@ export function useScrapeQueue(
       // Auto-assign to collections based on AI-generated tags + concepts
       if (autoAssignCollections && analysis) {
         try {
-          await autoAssignCollections(reelId, analysis.suggestedTags, analysis.concepts)
+          await autoAssignCollections(reelId, analysis.suggestedTags, analysis.concepts, analysis.contentCategory)
         } catch {
           // Non-critical: auto-collection assignment failure shouldn't block the flow
         }

@@ -70,6 +70,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
       id: r.id,
       suggestedTags: r.suggestedTags || [],
       concepts: r.concepts || [],
+      contentCategory: r.contentCategory,
     }))
     return retroactiveAutoAssign(reelData)
   }, [reels, retroactiveAutoAssign])
@@ -122,7 +123,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
         />
       )}
       {nav.tab === 'chat' && <Chat reels={reels} apiKey={apiKey} />}
-      {nav.tab === 'graph' && <NeuralGraph reels={reels} onReelClick={navigateToReel} />}
+      {nav.tab === 'graph' && <NeuralGraph reels={reels} collections={collections} onReelClick={navigateToReel} />}
       {nav.tab === 'collections' && (
         <Collections
           collections={collections}

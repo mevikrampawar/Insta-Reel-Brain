@@ -14,12 +14,13 @@ export function SearchBar({ reels, onResults }: Props) {
   const [mode, setMode] = useState<'keyword' | 'semantic'>('semantic')
   const [hasSearched, setHasSearched] = useState(false)
 
-  const handleSearch = async () => {
+  const handleSearch = async (modeOverride?: 'keyword' | 'semantic') => {
+    const activeMode = modeOverride || mode
     if (!query.trim()) { onResults([]); setHasSearched(false); return }
     setLoading(true)
     setHasSearched(true)
     try {
-      if (mode === 'keyword') {
+      if (activeMode === 'keyword') {
         onResults(keywordSearch(reels, query))
       } else {
         onResults(combinedSearch(reels, query))
@@ -29,6 +30,9 @@ export function SearchBar({ reels, onResults }: Props) {
     }
     setLoading(false)
   }
+
+  const handleSearchClick = () => handleSearch()
+  const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleSearch() }
 
   const handleClear = () => {
     setQuery('')
@@ -44,7 +48,7 @@ export function SearchBar({ reels, onResults }: Props) {
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            onKeyDown={handleKeyDown}
             placeholder="Search your reels..."
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-10 pr-9 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500 transition-colors"
           />
@@ -55,7 +59,7 @@ export function SearchBar({ reels, onResults }: Props) {
           )}
         </div>
         <button
-          onClick={handleSearch}
+          onClick={handleSearchClick}
           disabled={loading || !query.trim()}
           className="min-h-[48px] px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 shrink-0"
         >
@@ -67,7 +71,7 @@ export function SearchBar({ reels, onResults }: Props) {
       {/* Mode toggle — clear labels */}
       <div className="flex items-center gap-2 flex-wrap">
         <button
-          onClick={() => { setMode('semantic'); if (hasSearched && query.trim()) handleSearch() }}
+          onClick={() => { setMode('semantic'); if (hasSearched && query.trim()) handleSearch('semantic') }}
           className={`flex items-center gap-1.5 px-3 min-h-[40px] rounded-lg text-xs font-medium transition-colors ${
             mode === 'semantic'
               ? 'bg-indigo-500/15 border border-indigo-500/30 text-indigo-400'
@@ -77,7 +81,7 @@ export function SearchBar({ reels, onResults }: Props) {
           <Sparkles size={12} /> AI Search
         </button>
         <button
-          onClick={() => { setMode('keyword'); if (hasSearched && query.trim()) handleSearch() }}
+          onClick={() => { setMode('keyword'); if (hasSearched && query.trim()) handleSearch('keyword') }}
           className={`flex items-center gap-1.5 px-3 min-h-[40px] rounded-lg text-xs font-medium transition-colors ${
             mode === 'keyword'
               ? 'bg-indigo-500/15 border border-indigo-500/30 text-indigo-400'
