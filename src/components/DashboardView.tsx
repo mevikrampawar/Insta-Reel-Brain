@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { motion } from 'motion/react'
 import NumberFlow from '@number-flow/react'
 import { Sparkline } from 'react-tiny-sparkline'
-import { FolderOpen, Heart, MessageCircle, Play, Eye, Brain, Star, Hash } from 'lucide-react'
+import { FolderOpen, Heart, MessageCircle, Play, Eye, Brain, Star, Hash, Plus, ArrowRight, Smartphone } from 'lucide-react'
 import type { Reel, Collection } from '../types'
 import { computeQualityScore, getQualityLabel, getQualityColor } from '../utils/quality'
 import { formatCount, hashColor } from '../utils/format'
@@ -12,6 +12,9 @@ interface Props {
   collections: Collection[]
   onReelClick: (reelId: string) => void
   onFilterNavigate: (filters: { categories?: string[]; creator?: string }, highlightReelId?: string) => void
+  needsOnboarding?: boolean
+  onGoToIngest?: () => void
+  onGoToSettings?: () => void
 }
 
 const container = {
@@ -24,7 +27,7 @@ const item = {
   show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 300, damping: 25 } },
 }
 
-export function DashboardView({ reels, collections, onReelClick, onFilterNavigate }: Props) {
+export function DashboardView({ reels, collections, onReelClick, onFilterNavigate, needsOnboarding, onGoToIngest, onGoToSettings }: Props) {
   const completeReels = useMemo(() => reels.filter(r => r.ingestStatus === 'complete'), [reels])
 
   const stats = useMemo(() => {
@@ -362,12 +365,57 @@ export function DashboardView({ reels, collections, onReelClick, onFilterNavigat
         </div>
       </motion.div>
 
-      {/* Empty state */}
+      {/* Empty state — onboarding for new users */}
       {completeReels.length === 0 && (
-        <motion.div className="glass-card rounded-xl p-8 text-center" variants={item}>
-          <Brain size={32} className="text-zinc-700 mx-auto mb-3" />
-          <p className="text-sm text-zinc-400">No reels yet</p>
-          <p className="text-xs text-zinc-600 mt-1">Add your first reel to see your dashboard</p>
+        <motion.div className="glass-card rounded-xl p-6 md:p-8 text-center" variants={item}>
+          {needsOnboarding ? (
+            <div className="space-y-6">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/20">
+                <Brain size={28} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold mb-2">Welcome to Reel Brain</h3>
+                <p className="text-sm text-zinc-400 max-w-md mx-auto">
+                  Your AI-powered knowledge base for Instagram Reels. Save reels, and AI will transcribe, summarize, tag, and organize them for you.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-lg mx-auto text-left">
+                <div className="p-3 bg-white/[0.03] border border-white/5 rounded-xl">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center mb-2">
+                    <Smartphone size={14} className="text-blue-400" />
+                  </div>
+                  <p className="text-xs font-medium">1. Copy a reel link</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">From Instagram's share menu</p>
+                </div>
+                <div className="p-3 bg-white/[0.03] border border-white/5 rounded-xl">
+                  <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center mb-2">
+                    <Plus size={14} className="text-purple-400" />
+                  </div>
+                  <p className="text-xs font-medium">2. Paste it here</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">AI analyzes it automatically</p>
+                </div>
+                <div className="p-3 bg-white/[0.03] border border-white/5 rounded-xl">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-2">
+                    <Brain size={14} className="text-emerald-400" />
+                  </div>
+                  <p className="text-xs font-medium">3. Build your brain</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">Search, chat, and explore</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-center gap-3">
+                <button onClick={onGoToIngest} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors">
+                  <Plus size={14} /> Add your first reel <ArrowRight size={14} />
+                </button>
+              </div>
+              <p className="text-[10px] text-zinc-600">You have 5 free reels with trial API keys. Add your own keys in Settings for unlimited use.</p>
+            </div>
+          ) : (
+            <>
+              <Brain size={32} className="text-zinc-700 mx-auto mb-3" />
+              <p className="text-sm text-zinc-400">No reels yet</p>
+              <p className="text-xs text-zinc-600 mt-1">Add your first reel to see your dashboard</p>
+            </>
+          )}
         </motion.div>
       )}
     </motion.div>

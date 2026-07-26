@@ -64,18 +64,24 @@ API keys are stored per-user in Firestore. No `.env` files needed.
 
 You don't have to manually paste URLs. Set up automatic ingestion from your phone.
 
-### iOS Shortcut
+### iOS Shortcut (iPhone)
 
-1. Open the **Shortcuts** app on your iPhone
-2. Tap **+** to create a new Shortcut
-3. Add action: **Receive input from Share Sheet** → select "URLs"
-4. Add action: **URL** → enter:
+The best way to add reels from your iPhone. Set up once, use forever.
+
+1. Open the **Shortcuts** app on your iPhone (pre-installed)
+2. Tap **+** in the top right to create a new Shortcut
+3. Tap **Add Action** and search for **"Receive input"** → select **Receive input from Share Sheet**
+4. Tap **Add Action** again and search for **"URL"** → tap it
+5. In the URL field, enter:
    ```
-   https://mevikrampawar.github.io/Insta-Reel-Brain/?url=[clipboard]
+   https://mevikrampawar.github.io/Insta-Reel-Brain/?url=[Shortcut Input]
    ```
-5. Add action: **Open URLs**
-6. Name the shortcut **"Add to Reel Brain"**
-7. Done! From Instagram: tap **Share** → scroll to **"Add to Reel Brain"**
+   **Important:** Use `[Shortcut Input]` (NOT [clipboard]). Tap the variable bar above the keyboard → select "Shortcut Input"
+6. Tap **Add Action** and search for **"Open URL"** → tap it
+7. Tap the shortcut name at the top → rename it **"Add to Reel Brain"**
+8. Tap **Done** to save
+
+**To use it:** From Instagram → tap Share → scroll down → tap "Add to Reel Brain" → the reel auto-opens in your app and starts processing.
 
 ### Android / Desktop (PWA Share Target)
 
@@ -93,6 +99,10 @@ https://mevikrampawar.github.io/Insta-Reel-Brain/?url=https://www.instagram.com/
 ```
 
 When opened, the app auto-navigates to the ingest tab and adds the URL to the queue.
+
+### Clipboard Detection (iOS & Desktop)
+
+When you open the app, it automatically checks your clipboard for Instagram URLs. If one is found, you'll see a banner with an "Add it" button — just tap to ingest. This works on iOS 16+ (shows a paste permission banner) and all desktop browsers.
 
 ## How It Works
 

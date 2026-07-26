@@ -24,6 +24,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          VITE_MASTER_GROQ_KEY: ${{ secrets.VITE_MASTER_GROQ_KEY }}
+          VITE_MASTER_APIFY_KEY: ${{ secrets.VITE_MASTER_APIFY_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

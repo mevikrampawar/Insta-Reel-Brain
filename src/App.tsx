@@ -35,25 +35,26 @@ function getInitialTab(): string {
 function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAuth>['user']>; logout: () => void }) {
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel, deleteReelsBulk } = useReels(user.uid)
   const { collections, addCollection, deleteCollection, renameCollection, addReelToCollection, removeReelFromCollection, batchDeleteCollections, batchMergeCollections, assignReelsByCategory } = useCollections(user.uid)
-  const { apiKey, apifyApiKey } = useApiKey()
-  const { jobs, addJob, removeJob } = useScrapeQueue(apifyApiKey, apiKey, addReel, updateReel, assignReelsByCategory)
+  const apiCtx = useApiKey()
+  const { jobs, addJob, removeJob } = useScrapeQueue(apiCtx.apifyApiKey, apiCtx.apiKey, addReel, updateReel, assignReelsByCategory)
   const [nav, setNav] = useState<NavState>({ tab: getInitialTab() })
+  const [clipboardUrl, setClipboardUrl] = useState<string | null>(null)
+  const [firstRun] = useState(() => {
+    try { return !localStorage.getItem('reelbrain-visited') } catch { return true }
+  })
 
   // Handle deep link: ?url=<encoded_url> from iOS Shortcut or PWA share target
   // Also handles #ingest?url=<encoded_url> from service worker redirect
   useEffect(() => {
-    // Case 1: ?url= in query string (direct deep link)
     const params = new URLSearchParams(window.location.search)
     let deepUrl = params.get('url')
 
-    // Case 2: ?url= inside the hash fragment (PWA share target redirect)
     if (!deepUrl && window.location.hash.includes('url=')) {
       const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '')
       deepUrl = hashParams.get('url')
     }
 
     if (deepUrl) {
-      // Clean the URL immediately
       window.history.replaceState(null, '', `#ingest`)
       setNav({ tab: 'ingest' })
       try { localStorage.setItem('reelbrain-tab', 'ingest') } catch { /* ignore */ }
@@ -61,6 +62,27 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
       return () => clearTimeout(timer)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Clipboard detection — check for Instagram URLs when app loads
+  useEffect(() => {
+    const checkClipboard = async () => {
+      try {
+        const text = await navigator.clipboard.readText()
+        const match = text?.match(/https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p)\/[\w-]+/)
+        if (match) setClipboardUrl(match[0])
+      } catch {
+        // Clipboard read denied — that's fine, user can paste manually
+      }
+    }
+    // Delay to avoid interfering with initial render
+    const timer = setTimeout(checkClipboard, 1500)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Mark first visit as complete
+  useEffect(() => {
+    try { localStorage.setItem('reelbrain-visited', '1') } catch { /* ignore */ }
   }, [])
 
   // Persist tab to localStorage + URL hash
@@ -97,12 +119,11 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
   const handleRetroactiveAutoAssign = useCallback(async () => {
     const completeReels = reels.filter(r => r.ingestStatus === 'complete')
 
-    // Re-classify reels missing primaryCategory or categoryPath
     const reelsToClassify = completeReels.filter(r => !r.primaryCategory || !r.categoryPath?.length)
     for (const reel of reelsToClassify) {
       try {
         const categoryPath = await classifyReelHierarchy(
-          apiKey,
+          apiCtx.apiKey,
           reel.summary || reel.transcript || reel.caption || '',
           reel.suggestedTags || [],
           reel.entities || [],
@@ -118,13 +139,13 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
       primaryCategory: r.primaryCategory,
     }))
     return assignReelsByCategory(reelData)
-  }, [reels, apiKey, updateReel, assignReelsByCategory])
+  }, [reels, apiCtx.apiKey, updateReel, assignReelsByCategory])
 
   const handleReAnalyze = useCallback(async (ids: string[]) => {
     for (const id of ids) {
       const reel = reels.find(r => r.id === id)
       if (!reel) continue
-      await processReel(apiKey, {
+      await processReel(apiCtx.apiKey, {
         url: reel.url,
         transcript: reel.transcript || reel.caption || '',
         title: reel.title,
@@ -134,19 +155,19 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
         thumbnailUrl: reel.thumbnailUrl,
       }, id, updateReel)
     }
-  }, [reels, apiKey, updateReel])
+  }, [reels, apiCtx.apiKey, updateReel])
 
   const handleReScrape = useCallback(async (id: string) => {
     const reel = reels.find(r => r.id === id)
-    if (!reel || !apifyApiKey) return
+    if (!reel || !apiCtx.apifyApiKey) return
     await updateReel(id, { ingestStatus: 'scraping' })
     try {
-      const { runId } = await startApifyRun(apifyApiKey, reel.url)
+      const { runId } = await startApifyRun(apiCtx.apifyApiKey, reel.url)
       let status = 'RUNNING'
       let datasetId: string | undefined
       const deadline = Date.now() + 120_000
       while (Date.now() < deadline) {
-        const poll = await pollApifyRun(apifyApiKey, runId)
+        const poll = await pollApifyRun(apiCtx.apifyApiKey, runId)
         status = poll.status
         datasetId = poll.datasetId
         if (status === 'SUCCEEDED' || status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') break
@@ -156,7 +177,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
         await updateReel(id, { ingestStatus: 'failed', errorMessage: `Re-scrape failed: ${status}` })
         return
       }
-      const { result } = await fetchApifyDataset(apifyApiKey, datasetId)
+      const { result } = await fetchApifyDataset(apiCtx.apifyApiKey, datasetId)
       if (!result) {
         await updateReel(id, { ingestStatus: 'failed', errorMessage: 'Re-scrape returned no data' })
         return
@@ -188,7 +209,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
         audioTrack: result.audioTrack,
         audioArtist: result.audioArtist,
       })
-      await processReel(apiKey, {
+      await processReel(apiCtx.apiKey, {
         url: reel.url,
         transcript: result.transcript || result.caption || '',
         title: result.title,
@@ -200,11 +221,11 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
     } catch {
       await updateReel(id, { ingestStatus: 'failed', errorMessage: 'Re-scrape failed' })
     }
-  }, [reels, apifyApiKey, apiKey, updateReel])
+  }, [reels, apiCtx.apifyApiKey, apiCtx.apiKey, updateReel])
 
   return (
-    <Layout nav={nav} onNavChange={handleNavChange} onLogout={logout} userPhoto={user.photoURL || undefined}>
-      {nav.tab === 'dashboard' && <DashboardView reels={reels} collections={collections} onReelClick={navigateToReel} onFilterNavigate={navigateToLibraryFiltered} />}
+    <Layout nav={nav} onNavChange={handleNavChange} onLogout={logout} userPhoto={user.photoURL || undefined} needsApiSetup={!apiCtx.hasOwnGroqKey && !apiCtx.hasOwnApifyKey && firstRun}>
+      {nav.tab === 'dashboard' && <DashboardView reels={reels} collections={collections} onReelClick={navigateToReel} onFilterNavigate={navigateToLibraryFiltered} needsOnboarding={firstRun && reels.length === 0} onGoToIngest={() => handleNavChange({ tab: 'ingest' })} onGoToSettings={() => handleNavChange({ tab: 'settings' })} />}
       {reelsLoading && nav.tab === 'library' && (
         <div className="flex items-center justify-center h-full">
           <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -230,12 +251,19 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           jobs={jobs}
           addJob={addJob}
           removeJob={removeJob}
-          apiKey={apiKey}
-          apifyApiKey={apifyApiKey}
+          apiKey={apiCtx.apiKey}
+          apifyApiKey={apiCtx.apifyApiKey}
           onSwitchToLibrary={() => handleNavChange({ tab: 'library' })}
+          clipboardUrl={clipboardUrl}
+          onDismissClipboard={() => setClipboardUrl(null)}
+          masterUsageCount={apiCtx.masterUsageCount}
+          masterUsageLimit={apiCtx.masterUsageLimit}
+          isUsingMasterKeys={apiCtx.isUsingMasterGroq || apiCtx.isUsingMasterApify}
+          hasOwnKeys={apiCtx.hasOwnGroqKey && apiCtx.hasOwnApifyKey}
+          onGoToSettings={() => handleNavChange({ tab: 'settings' })}
         />
       )}
-      {nav.tab === 'chat' && <Chat reels={reels} apiKey={apiKey} onReelClick={navigateToReel} />}
+      {nav.tab === 'chat' && <Chat reels={reels} apiKey={apiCtx.apiKey} onReelClick={navigateToReel} />}
       {nav.tab === 'graph' && <NeuralGraph reels={reels} onReelClick={navigateToReel} />}
       {nav.tab === 'collections' && (
         <Collections
@@ -253,7 +281,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
         />
       )}
       {nav.tab === 'datasources' && (
-        <DataSources reels={reels} apifyApiKey={apifyApiKey} groqApiKey={apiKey} onReelClick={navigateToReel} />
+        <DataSources reels={reels} apifyApiKey={apiCtx.apifyApiKey} groqApiKey={apiCtx.apiKey} onReelClick={navigateToReel} />
       )}
       {nav.tab === 'settings' && <Settings userId={user.uid} />}
     </Layout>

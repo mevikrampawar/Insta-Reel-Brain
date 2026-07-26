@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import { Link, Loader2, AlertCircle, Sparkles, CheckCircle2, Video, XCircle, RefreshCw, Clock, ArrowRight } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { Link, Loader2, AlertCircle, Sparkles, CheckCircle2, Video, XCircle, RefreshCw, Clock, ArrowRight, Clipboard, Settings, ExternalLink, Smartphone } from 'lucide-react'
 import type { ScrapeJob, JobPhase } from '../hooks/useScrapeQueue'
 
 interface Props {
@@ -9,6 +9,13 @@ interface Props {
   apiKey: string
   apifyApiKey: string
   onSwitchToLibrary: () => void
+  clipboardUrl?: string | null
+  onDismissClipboard?: () => void
+  masterUsageCount?: number
+  masterUsageLimit?: number
+  isUsingMasterKeys?: boolean
+  hasOwnKeys?: boolean
+  onGoToSettings?: () => void
 }
 
 const phaseUI: Record<JobPhase, { icon: typeof Loader2; color: string; label: string }> = {
@@ -27,9 +34,14 @@ function shortUrl(url: string) {
   } catch { return url.slice(0, 40) }
 }
 
-export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, onSwitchToLibrary }: Props) {
+export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, onSwitchToLibrary, clipboardUrl, onDismissClipboard, masterUsageCount = 0, masterUsageLimit = 5, isUsingMasterKeys = false, hasOwnKeys = false, onGoToSettings }: Props) {
   const [url, setUrl] = useState('')
   const hasApify = !!apifyApiKey.trim()
+  const freeRemaining = Math.max(0, masterUsageLimit - masterUsageCount)
+
+  useEffect(() => {
+    if (clipboardUrl && !url) setUrl(clipboardUrl)
+  }, [clipboardUrl, url])
 
   const handleSubmit = useCallback(() => {
     const trimmed = url.trim()
@@ -70,9 +82,82 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
         )}
       </div>
 
+      {/* Free tier usage banner */}
+      {isUsingMasterKeys && !hasOwnKeys && (
+        <div className={`rounded-xl p-3 flex items-center gap-3 text-xs ${freeRemaining <= 2 ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-indigo-500/10 border border-indigo-500/20'}`}>
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${freeRemaining <= 2 ? 'bg-amber-500/20' : 'bg-indigo-500/20'}`}>
+            {freeRemaining <= 2 ? <AlertCircle size={14} className="text-amber-400" /> : <Sparkles size={14} className="text-indigo-400" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            {freeRemaining > 0 ? (
+              <p className={freeRemaining <= 2 ? 'text-amber-300' : 'text-indigo-300'}>
+                <span className="font-medium">{freeRemaining} free reel{freeRemaining !== 1 ? 's' : ''} remaining</span>
+                <span className="text-zinc-500"> — add your own API keys for unlimited use</span>
+              </p>
+            ) : (
+              <p className="text-amber-300">
+                <span className="font-medium">Free trial used up.</span>
+                <span className="text-zinc-500"> Add your own API keys to continue — both are free to get.</span>
+              </p>
+            )}
+          </div>
+          {onGoToSettings && (
+            <button onClick={onGoToSettings} className="flex items-center gap-1 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-zinc-300 shrink-0 transition-colors">
+              <Settings size={12} /> Keys
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Clipboard detection banner */}
+      {clipboardUrl && (
+        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
+            <Clipboard size={14} className="text-emerald-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-emerald-300">Instagram link detected in clipboard</p>
+            <p className="text-[10px] text-zinc-500 truncate">{clipboardUrl}</p>
+          </div>
+          <button onClick={() => { addJob(clipboardUrl); onDismissClipboard?.(); setUrl('') }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-medium text-white shrink-0 transition-colors">
+            Add it
+          </button>
+          <button onClick={onDismissClipboard} className="p-1.5 text-zinc-500 hover:text-zinc-300 transition-colors">
+            <XCircle size={14} />
+          </button>
+        </div>
+      )}
+
       {!hasApify && (
         <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-400">
           Add Apify API key in <strong>Settings</strong> to scrape reels.
+        </div>
+      )}
+
+      {/* How to add from iPhone — shown to new users */}
+      {jobs.length === 0 && activeJobs.length === 0 && (
+        <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+          <p className="text-xs font-medium text-zinc-300 mb-2">Quick ways to add reels:</p>
+          <div className="space-y-2">
+            <div className="flex items-start gap-2.5">
+              <Smartphone size={14} className="text-indigo-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs text-zinc-300"><span className="font-medium">iPhone:</span> Copy a reel link from Instagram, then paste it here (or tap "Add it" above)</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <Link size={14} className="text-purple-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs text-zinc-300"><span className="font-medium">Any device:</span> Paste an Instagram reel URL in the box below</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <ExternalLink size={14} className="text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs text-zinc-300"><span className="font-medium">iOS Shortcut:</span> Set up the "Add to Reel Brain" shortcut to share directly from Instagram</p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -94,8 +179,8 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
             aria-label="Submit URL"
             className="min-w-[48px] min-h-[48px] flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium text-sm transition-colors"
           >
-          <ArrowRight size={16} />
-        </button>
+            <ArrowRight size={16} />
+          </button>
       </div>
 
       {activeJobs.length > 0 && (
@@ -124,7 +209,7 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
       )}
 
       {jobs.length === 0 && (
-        <div className="text-center py-16 text-zinc-600">
+        <div className="text-center py-12 text-zinc-600">
           <Video size={36} className="mx-auto mb-3 opacity-20" />
           <p className="text-sm">Paste a reel URL above to get started</p>
           <p className="text-xs mt-1 text-zinc-700">Add multiple URLs — they process in parallel</p>

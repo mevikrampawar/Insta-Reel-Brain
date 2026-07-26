@@ -17,6 +17,7 @@ interface Props {
   onNavChange: (nav: NavState) => void
   onLogout: () => void
   userPhoto?: string
+  needsApiSetup?: boolean
 }
 
 const primaryTabs = [
@@ -33,7 +34,7 @@ const secondaryTabs = [
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ]
 
-export function Layout({ children, nav, onNavChange, onLogout, userPhoto }: Props) {
+export function Layout({ children, nav, onNavChange, onLogout, userPhoto, needsApiSetup }: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
@@ -142,7 +143,23 @@ export function Layout({ children, nav, onNavChange, onLogout, userPhoto }: Prop
       </AnimatePresence>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto pb-20 md:pb-0">{children}</main>
+      <main className="flex-1 overflow-auto pb-20 md:pb-0">
+        {needsApiSetup && nav.tab === 'dashboard' && (
+          <div className="mx-4 mt-4 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
+              <SettingsIcon size={16} className="text-amber-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-amber-300">Welcome! You have 5 free reels</p>
+              <p className="text-xs text-zinc-400 mt-0.5">Reel Brain includes trial API keys to get you started. Add your own keys in Settings for unlimited use.</p>
+            </div>
+            <button onClick={() => onNavChange({ tab: 'settings' })} className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 rounded-lg text-xs font-medium text-amber-300 shrink-0 transition-colors">
+              Settings
+            </button>
+          </div>
+        )}
+        {children}
+      </main>
 
       {/* Mobile bottom nav — 48px touch targets */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 glass-strong border-t border-white/5 flex justify-around py-1.5 px-1 shrink-0 z-40 safe-area-bottom">
