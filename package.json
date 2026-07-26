@@ -13,17 +13,16 @@
   "dependencies": {
     "@number-flow/react": "^0.6.2",
     "@tailwindcss/vite": "^4.3.3",
-    "cytoscape": "^3.34.0",
     "firebase": "^12.16.0",
     "lucide-react": "^1.26.0",
     "motion": "^12.42.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-force-graph-3d": "^1.29.1",
     "react-tiny-sparkline": "^1.1.1",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
-    "@types/cytoscape": "^3.21.9",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

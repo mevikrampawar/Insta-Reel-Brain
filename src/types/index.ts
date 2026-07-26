@@ -92,20 +92,6 @@ export interface ReelNote {
   updatedAt: number
 }
 
-export interface GraphNode {
-  id: string
-  name: string
-  type: 'reel' | 'concept'
-  conceptType?: string
-  val: number
-}
-
-export interface GraphEdge {
-  source: string
-  target: string
-  weight: number
-}
-
 export interface SearchResult {
   reel: Reel
   score: number
