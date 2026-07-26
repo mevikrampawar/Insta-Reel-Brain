@@ -41,6 +41,18 @@ async function callGroq(
   }, { maxRetries: 2, baseDelayMs: 1500 })
 }
 
+function parseJsonFromLLMResponse<T>(raw: string, fallback: T): T {
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    const match = raw.match(/\{[\s\S]*\}/)
+    if (match) {
+      try { return JSON.parse(match[0]) as T } catch { /* fall through */ }
+    }
+    return fallback
+  }
+}
+
 export async function analyzeReel(
   apiKey: string,
   transcript: string,
@@ -106,52 +118,20 @@ Respond with ONLY this JSON:
     },
   ], { temperature: 0.2, max_tokens: 2000 })
 
-  try {
-    const parsed = JSON.parse(raw)
-    return {
-      summary: parsed.summary || '',
-      keyTakeaways: parsed.keyTakeaways || [],
-      suggestedTags: parsed.suggestedTags || [],
-      concepts: parsed.concepts || [],
-      language: parsed.language || 'en',
-      actionItems: parsed.actionItems || [],
-      entities: parsed.entities || [],
-      contentCategory: parsed.contentCategory || 'other',
-      sentiment: parsed.sentiment || 'neutral',
-      targetAudience: parsed.targetAudience || '',
-    }
-  } catch {
-    const match = raw.match(/\{[\s\S]*\}/)
-    if (match) {
-      try {
-        const parsed = JSON.parse(match[0])
-        return {
-          summary: parsed.summary || '',
-          keyTakeaways: parsed.keyTakeaways || [],
-          suggestedTags: parsed.suggestedTags || [],
-          concepts: parsed.concepts || [],
-          language: parsed.language || 'en',
-          actionItems: parsed.actionItems || [],
-          entities: parsed.entities || [],
-          contentCategory: parsed.contentCategory || 'other',
-          sentiment: parsed.sentiment || 'neutral',
-          targetAudience: parsed.targetAudience || '',
-        }
-      } catch { /* fall through */ }
-    }
-    return {
-      summary: transcript.slice(0, 200),
-      keyTakeaways: [],
-      suggestedTags: [],
-      concepts: [],
-      language: 'en',
-      actionItems: [],
-      entities: [],
-      contentCategory: 'other',
-      sentiment: 'neutral',
-      targetAudience: '',
-    }
+  const fallback = {
+    summary: transcript.slice(0, 200),
+    keyTakeaways: [],
+    suggestedTags: [],
+    concepts: [],
+    language: 'en',
+    actionItems: [],
+    entities: [],
+    contentCategory: 'other',
+    sentiment: 'neutral',
+    targetAudience: '',
   }
+
+  return parseJsonFromLLMResponse(raw, fallback)
 }
 
 export async function chatWithLibrary(
@@ -271,12 +251,5 @@ Respond with ONLY this JSON:
     },
   ], { temperature: 0.1, max_tokens: 1000 })
 
-  try { return JSON.parse(raw) }
-  catch {
-    const match = raw.match(/\{[\s\S]*\}/)
-    if (match) {
-      try { return JSON.parse(match[0]) } catch { /* fall through */ }
-    }
-    return { title: '', creator: '', caption: '', hashtags: [], description: '' }
-  }
+  return parseJsonFromLLMResponse(raw, { title: '', creator: '', caption: '', hashtags: [], description: '' })
 }

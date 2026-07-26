@@ -84,7 +84,7 @@ export function buildTfIdfIndex(
     // L2 normalize
     const norm = Math.sqrt(values.reduce((s, v) => s + v * v, 0))
     if (norm > 0) {
-      for (let i = 0; i < values.length; i++) values[i] /= norm
+      for (let j = 0; j < values.length; j++) values[j] /= norm
     }
     return { id: doc.id, vector: { terms, values } }
   })

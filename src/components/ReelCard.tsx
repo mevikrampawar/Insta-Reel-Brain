@@ -4,6 +4,7 @@ import type { Reel, Collection } from '../types'
 import { useNotes } from '../hooks/useNotes'
 import { Notes } from './Notes'
 import { computeQualityScore, getQualityLabel, getQualityColor } from '../utils/quality'
+import { formatCount, hashColor } from '../utils/format'
 
 interface Props {
   reel: Reel
@@ -13,25 +14,11 @@ interface Props {
   onAddToCollection?: (reelId: string, collectionId: string) => void
 }
 
-function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return String(n)
-}
-
 function formatDuration(sec: number): string {
   if (!sec) return ''
   const m = Math.floor(sec / 60)
   const s = Math.floor(sec % 60)
   return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`
-}
-
-// Deterministic color from string
-function hashColor(str: string): string {
-  let h = 0
-  for (let i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h)
-  const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#8b5cf6', '#f97316']
-  return colors[Math.abs(h) % colors.length]
 }
 
 export function ReelCard({ reel, userId, onDelete, collections, onAddToCollection }: Props) {
@@ -180,9 +167,14 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
               <Music size={10} className="shrink-0" /> <span className="truncate max-w-[100px]">{reel.audioTrack}</span>
             </span>
           )}
-          <span className={`flex items-center gap-1 text-[11px] ${getQualityColor(computeQualityScore(reel).overall)}`}>
-              <Star size={10} className="shrink-0" /> {getQualityLabel(computeQualityScore(reel).overall)}
-            </span>
+          {(() => {
+            const qs = computeQualityScore(reel).overall
+            return (
+              <span className={`flex items-center gap-1 text-[11px] ${getQualityColor(qs)}`}>
+                <Star size={10} className="shrink-0" /> {getQualityLabel(qs)}
+              </span>
+            )
+          })()}
           {/* Content Category */}
           {reel.contentCategory && reel.contentCategory !== 'other' && (
             <span className="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded text-[10px] capitalize">{reel.contentCategory}</span>

@@ -54,7 +54,8 @@ export function Settings({ userId }: Props) {
       const ex = snap.exists() ? snap.data() : { groqApiKey: '', apifyApiKey: '' }
       await setDoc(doc(db, 'users', userId, 'settings', 'preferences'), { ...ex, [key]: s.local.trim(), updatedAt: Date.now() })
       set({ local: s.local.trim(), cloud: s.local.trim(), saving: false, savedFlash: true, testing: false, testResult: null })
-      setTimeout(() => set(p => ({ ...p, savedFlash: false })), 2000)
+      const t = setTimeout(() => { if (mounted.current) set(p => ({ ...p, savedFlash: false })) }, 2000)
+      return () => clearTimeout(t)
     } catch {
       set(p => ({ ...p, saving: false }))
     }
@@ -69,7 +70,8 @@ export function Settings({ userId }: Props) {
       const ex = snap.exists() ? snap.data() : { groqApiKey: '', apifyApiKey: '' }
       await setDoc(doc(db, 'users', userId, 'settings', 'preferences'), { ...ex, [key]: '', updatedAt: Date.now() })
       set({ local: '', cloud: '', saving: false, savedFlash: true, testing: false, testResult: null })
-      setTimeout(() => set(p => ({ ...p, savedFlash: false })), 2000)
+      const t = setTimeout(() => { if (mounted.current) set(p => ({ ...p, savedFlash: false })) }, 2000)
+      return () => clearTimeout(t)
     } catch {
       set(p => ({ ...p, saving: false }))
     }
@@ -82,7 +84,8 @@ export function Settings({ userId }: Props) {
       const r = await fetch('https://api.groq.com/openai/v1/models', { headers: { Authorization: `Bearer ${groq.local.trim()}` } })
       setGroq(s => ({ ...s, testing: false, testResult: r.ok ? 'ok' : 'fail' }))
     } catch { setGroq(s => ({ ...s, testing: false, testResult: 'fail' })) }
-    setTimeout(() => setGroq(s => ({ ...s, testResult: null })), 4000)
+    const t = setTimeout(() => { if (mounted.current) setGroq(s => ({ ...s, testResult: null })) }, 4000)
+    return () => clearTimeout(t)
   }, [groq.local])
 
   const testApify = useCallback(async () => {
@@ -92,7 +95,8 @@ export function Settings({ userId }: Props) {
       const r = await fetch('https://api.apify.com/v2/users/me', { headers: { Authorization: `Bearer ${apify.local.trim()}` } })
       setApify(s => ({ ...s, testing: false, testResult: r.ok ? 'ok' : 'fail' }))
     } catch { setApify(s => ({ ...s, testing: false, testResult: 'fail' })) }
-    setTimeout(() => setApify(s => ({ ...s, testResult: null })), 4000)
+    const t = setTimeout(() => { if (mounted.current) setApify(s => ({ ...s, testResult: null })) }, 4000)
+    return () => clearTimeout(t)
   }, [apify.local])
 
   if (loading) return <div className="p-8 flex items-center justify-center"><div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>

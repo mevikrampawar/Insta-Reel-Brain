@@ -5,24 +5,12 @@ import { Sparkline } from 'react-tiny-sparkline'
 import { FolderOpen, TrendingUp, Heart, MessageCircle, Play, Eye, Brain, Star, Hash } from 'lucide-react'
 import type { Reel, Collection } from '../types'
 import { computeQualityScore, getQualityLabel, getQualityColor } from '../utils/quality'
+import { formatCount, hashColor } from '../utils/format'
 
 interface Props {
   reels: Reel[]
   collections: Collection[]
   onReelClick: (reelId: string) => void
-}
-
-function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return String(n)
-}
-
-function hashColor(str: string): string {
-  let h = 0
-  for (let i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h)
-  const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#8b5cf6', '#f97316']
-  return colors[Math.abs(h) % colors.length]
 }
 
 const container = {

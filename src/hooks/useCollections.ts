@@ -50,15 +50,9 @@ export function useCollections(userId: string | undefined) {
     await fetch()
   }, [userId, fetch])
 
-  const deleteCollection = useCallback(async (id: string, keepReels?: boolean) => {
+  const deleteCollection = useCallback(async (id: string, _keepReels?: boolean) => {
     if (!userId) return
-    if (keepReels) {
-      // Just remove the collection, reels stay in db
-      await deleteDoc(doc(db, 'users', userId, 'collections', id))
-    } else {
-      // Delete collection only — reels are separate docs, not affected
-      await deleteDoc(doc(db, 'users', userId, 'collections', id))
-    }
+    await deleteDoc(doc(db, 'users', userId, 'collections', id))
     await fetch()
   }, [userId, fetch])
 

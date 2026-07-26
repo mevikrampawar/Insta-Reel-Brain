@@ -63,9 +63,9 @@ export function Layout({ children, nav, onNavChange, onLogout, userPhoto }: Prop
         <div className="p-2 border-t border-white/5">
           <div className="flex items-center gap-3 px-3 py-2">
             {userPhoto && (
-              <img src={userPhoto} className="w-6 h-6 rounded-full ring-2 ring-white/10" alt="" />
+              <img src={userPhoto} className="w-6 h-6 rounded-full ring-2 ring-white/10" alt="Profile" />
             )}
-            <button onClick={onLogout} className="text-zinc-400 hover:text-white transition-colors ml-auto">
+            <button onClick={onLogout} className="text-zinc-400 hover:text-white transition-colors ml-auto" aria-label="Sign out">
               <LogOut size={16} />
             </button>
           </div>
@@ -81,8 +81,8 @@ export function Layout({ children, nav, onNavChange, onLogout, userPhoto }: Prop
           <span className="font-bold text-sm">Reel Brain</span>
         </div>
         <div className="flex items-center gap-2">
-          {userPhoto && <img src={userPhoto} className="w-7 h-7 rounded-full ring-2 ring-white/10" alt="" />}
-          <button onClick={() => setMenuOpen(!menuOpen)} className="p-2.5 text-zinc-400 hover:text-white -mr-2.5">
+          {userPhoto && <img src={userPhoto} className="w-7 h-7 rounded-full ring-2 ring-white/10" alt="Profile" />}
+          <button onClick={() => setMenuOpen(!menuOpen)} className="p-2.5 text-zinc-400 hover:text-white -mr-2.5" aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen}>
             {menuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
@@ -108,7 +108,7 @@ export function Layout({ children, nav, onNavChange, onLogout, userPhoto }: Prop
             >
               <div className="p-4 border-b border-white/5 flex items-center justify-between">
                 <span className="font-medium text-sm">Menu</span>
-                <button onClick={() => setMenuOpen(false)} className="p-2 text-zinc-500 hover:text-white"><X size={18} /></button>
+                <button onClick={() => setMenuOpen(false)} className="p-2 text-zinc-500 hover:text-white" aria-label="Close menu"><X size={18} /></button>
               </div>
               <nav className="flex-1 p-3 space-y-1">
                 {secondaryTabs.map(t => (

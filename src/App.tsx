@@ -80,11 +80,11 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           reel.contentCategory || 'other',
         )
         await updateReel(reel.id, { primaryCategory })
-        reel.primaryCategory = primaryCategory
       } catch { /* skip classification failure */ }
     }
 
-    const reelData = completeReels.map(r => ({
+    const updatedReels = reels.filter(r => r.ingestStatus === 'complete')
+    const reelData = updatedReels.map(r => ({
       id: r.id,
       primaryCategory: r.primaryCategory,
     }))

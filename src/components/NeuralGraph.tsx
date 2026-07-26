@@ -12,7 +12,7 @@ const NODE_COLORS: Record<string, string> = {
   concept: '#10b981',
 }
 
-function buildElements(reels: Reel[], _collections: Collection[]) {
+function buildElements(reels: Reel[]) {
   const completeReels = reels.filter(r => r.ingestStatus === 'complete')
   const elements: cytoscape.ElementDefinition[] = []
   const addedCreators = new Set<string>()
@@ -110,7 +110,7 @@ function buildElements(reels: Reel[], _collections: Collection[]) {
   return elements
 }
 
-function getGraphStyle(showLabels: boolean): any[] {
+function getGraphStyle(showLabels: boolean): cytoscape.StylesheetCSS[] {
   const label = showLabels ? 'data(label)' : ''
   return [
     {
@@ -218,7 +218,7 @@ function getGraphStyle(showLabels: boolean): any[] {
   ]
 }
 
-export function NeuralGraph({ reels, collections, onReelClick }: Props) {
+export function NeuralGraph({ reels, collections: _collections, onReelClick }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<cytoscape.Core | null>(null)
   const onReelClickRef = useRef(onReelClick)
@@ -227,7 +227,7 @@ export function NeuralGraph({ reels, collections, onReelClick }: Props) {
   const initializedRef = useRef(false)
   const elementIdsRef = useRef<Set<string>>(new Set())
 
-  const elements = useMemo(() => buildElements(reels, collections), [reels, collections])
+  const elements = useMemo(() => buildElements(reels), [reels])
 
   // Stable callback ref — prevents graph rebuilds when parent re-renders
   useEffect(() => { onReelClickRef.current = onReelClick }, [onReelClick])
@@ -318,7 +318,7 @@ export function NeuralGraph({ reels, collections, onReelClick }: Props) {
     // Add new elements
     const toAdd = elements.filter(e => e.data.id && !oldIds.has(e.data.id))
     if (toAdd.length > 0) {
-      cy.add(toAdd as any)
+      cy.add(toAdd as cytoscape.ElementDefinition[])
       // Run layout only for new nodes
       const newNodes = cy.nodes().filter(n => toAdd.some(e => e.data.id === n.id()))
       if (newNodes.length > 0) {
@@ -330,7 +330,7 @@ export function NeuralGraph({ reels, collections, onReelClick }: Props) {
           numIter: 200,
           animate: false,
           padding: 40,
-        } as any).run()
+        } as cytoscape.LayoutOptions).run()
       }
     }
 

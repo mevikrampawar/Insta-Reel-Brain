@@ -64,9 +64,7 @@ export function useReels(userId: string | undefined) {
   const deleteReelsBulk = useCallback(async (ids: string[]) => {
     if (!userId) return
     try {
-      for (const id of ids) {
-        await deleteDoc(doc(db, 'users', userId, 'reels', id))
-      }
+      await Promise.all(ids.map(id => deleteDoc(doc(db, 'users', userId, 'reels', id))))
       await fetchReels()
     } catch (e) {
       console.error('Failed to bulk delete reels:', e)
