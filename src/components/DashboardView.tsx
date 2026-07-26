@@ -14,7 +14,6 @@ interface Props {
   onFilterNavigate: (filters: { categories?: string[]; creator?: string }, highlightReelId?: string) => void
   needsOnboarding?: boolean
   onGoToIngest?: () => void
-  onGoToSettings?: () => void
 }
 
 const container = {
@@ -27,7 +26,7 @@ const item = {
   show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 300, damping: 25 } },
 }
 
-export function DashboardView({ reels, collections, onReelClick, onFilterNavigate, needsOnboarding, onGoToIngest, onGoToSettings }: Props) {
+export function DashboardView({ reels, collections, onReelClick, onFilterNavigate, needsOnboarding, onGoToIngest }: Props) {
   const completeReels = useMemo(() => reels.filter(r => r.ingestStatus === 'complete'), [reels])
 
   const stats = useMemo(() => {

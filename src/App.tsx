@@ -232,7 +232,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
 
   return (
     <Layout nav={nav} onNavChange={handleNavChange} onLogout={logout} userPhoto={user.photoURL || undefined} needsApiSetup={!apiCtx.hasOwnGroqKey && !apiCtx.hasOwnApifyKey && firstRun}>
-      {nav.tab === 'dashboard' && <DashboardView reels={reels} collections={collections} onReelClick={navigateToReel} onFilterNavigate={navigateToLibraryFiltered} needsOnboarding={firstRun && reels.length === 0} onGoToIngest={() => handleNavChange({ tab: 'ingest' })} onGoToSettings={() => handleNavChange({ tab: 'settings' })} />}
+      {nav.tab === 'dashboard' && <DashboardView reels={reels} collections={collections} onReelClick={navigateToReel} onFilterNavigate={navigateToLibraryFiltered} needsOnboarding={firstRun && reels.length === 0} onGoToIngest={() => handleNavChange({ tab: 'ingest' })} />}
       {reelsLoading && nav.tab === 'library' && (
         <div className="flex items-center justify-center h-full">
           <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
