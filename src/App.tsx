@@ -5,6 +5,7 @@ import { useCollections } from './hooks/useCollections'
 import { useScrapeQueue } from './hooks/useScrapeQueue'
 import { ApiKeyProvider, useApiKey } from './hooks/ApiKeyContext'
 import { processReel } from './services/ingestion'
+import { classifyReelCategory } from './services/groq'
 import { Login } from './components/Login'
 import { Layout, type NavState } from './components/Layout'
 import { Library } from './components/Library'
@@ -32,7 +33,7 @@ function getInitialTab(): string {
 
 function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAuth>['user']>; logout: () => void }) {
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel, deleteReelsBulk } = useReels(user.uid)
-  const { collections, addCollection, deleteCollection, renameCollection, addReelToCollection, removeReelFromCollection, mergeCollections, assignReelsByCategory } = useCollections(user.uid)
+  const { collections, addCollection, deleteCollection, renameCollection, addReelToCollection, removeReelFromCollection, batchDeleteCollections, batchMergeCollections, assignReelsByCategory } = useCollections(user.uid)
   const { apiKey, apifyApiKey } = useApiKey()
   const { jobs, addJob, removeJob } = useScrapeQueue(apifyApiKey, apiKey, addReel, updateReel, assignReelsByCategory)
   const [nav, setNav] = useState<NavState>({ tab: getInitialTab() })
@@ -66,12 +67,29 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
 
   const handleRetroactiveAutoAssign = useCallback(async () => {
     const completeReels = reels.filter(r => r.ingestStatus === 'complete')
+
+    // Re-classify reels missing primaryCategory
+    const reelsToClassify = completeReels.filter(r => !r.primaryCategory)
+    for (const reel of reelsToClassify) {
+      try {
+        const primaryCategory = await classifyReelCategory(
+          apiKey,
+          reel.summary || reel.transcript || reel.caption || '',
+          reel.suggestedTags || [],
+          reel.entities || [],
+          reel.contentCategory || 'other',
+        )
+        await updateReel(reel.id, { primaryCategory })
+        reel.primaryCategory = primaryCategory
+      } catch { /* skip classification failure */ }
+    }
+
     const reelData = completeReels.map(r => ({
       id: r.id,
       primaryCategory: r.primaryCategory,
     }))
     return assignReelsByCategory(reelData)
-  }, [reels, assignReelsByCategory])
+  }, [reels, apiKey, updateReel, assignReelsByCategory])
 
   const handleReAnalyze = useCallback(async (ids: string[]) => {
     for (const id of ids) {
@@ -129,7 +147,8 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           onAdd={addCollection}
           onDelete={deleteCollection}
           onRename={renameCollection}
-          onMerge={mergeCollections}
+          onBatchDelete={batchDeleteCollections}
+          onBatchMerge={batchMergeCollections}
           onAddReel={addReelToCollection}
           onRemoveReel={removeReelFromCollection}
           onReelClick={navigateToReel}

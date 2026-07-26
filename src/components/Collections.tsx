@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, FolderOpen, Trash2, ChevronRight, X, Tag, ArrowRight, RefreshCw, Loader2, Pencil, GitMerge, GripVertical } from 'lucide-react'
+import { Plus, FolderOpen, Trash2, ChevronRight, X, Tag, ArrowRight, RefreshCw, Loader2, Pencil, GitMerge, GripVertical, CheckSquare, Square } from 'lucide-react'
 import type { Collection, Reel } from '../types'
 
 interface Props {
@@ -8,7 +8,8 @@ interface Props {
   onAdd: (data: Partial<Collection>) => Promise<void>
   onDelete: (id: string, keepReels?: boolean) => Promise<void>
   onRename: (id: string, newName: string) => Promise<void>
-  onMerge: (sourceId: string, targetId: string) => Promise<void>
+  onBatchDelete: (ids: string[]) => Promise<void>
+  onBatchMerge: (sourceIds: string[], targetId: string) => Promise<void>
   onAddReel: (collectionId: string, reelId: string) => Promise<void>
   onRemoveReel: (collectionId: string, reelId: string) => Promise<void>
   onReelClick?: (reelId: string) => void
@@ -17,7 +18,7 @@ interface Props {
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#8b5cf6']
 
-export function Collections({ collections, reels, onAdd, onDelete, onRename, onMerge, onAddReel, onRemoveReel, onReelClick, onRetroactiveAutoAssign }: Props) {
+export function Collections({ collections, reels, onAdd, onDelete, onRename, onBatchDelete, onBatchMerge, onAddReel, onRemoveReel, onReelClick, onRetroactiveAutoAssign }: Props) {
   const [showNew, setShowNew] = useState(false)
   const [name, setName] = useState('')
   const [desc, setDesc] = useState('')
@@ -25,13 +26,41 @@ export function Collections({ collections, reels, onAdd, onDelete, onRename, onM
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
-  const [mergeSource, setMergeSource] = useState<string | null>(null)
-  const [mergeTarget, setMergeTarget] = useState<string | null>(null)
-  const [showMergePanel, setShowMergePanel] = useState(false)
-  const [retroRunning, setRetroRunning] = useState(false)
-  const [retroResult, setRetroResult] = useState<{ processed: number; assigned: number } | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [showAddReelPanel, setShowAddReelPanel] = useState<string | null>(null)
+  const [retroRunning, setRetroRunning] = useState(false)
+  const [retroResult, setRetroResult] = useState<{ processed: number; assigned: number } | null>(null)
+
+  // Batch mode
+  const [batchMode, setBatchMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false)
+  const [showBatchMergePanel, setShowBatchMergePanel] = useState(false)
+  const [batchMergeTarget, setBatchMergeTarget] = useState<string | null>(null)
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const selectAll = () => {
+    if (selectedIds.size === collections.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(collections.map(c => c.id)))
+    }
+  }
+
+  const exitBatch = () => {
+    setBatchMode(false)
+    setSelectedIds(new Set())
+    setShowBatchDeleteConfirm(false)
+    setShowBatchMergePanel(false)
+    setBatchMergeTarget(null)
+  }
 
   const handleCreate = async () => {
     if (!name.trim()) return
@@ -48,17 +77,16 @@ export function Collections({ collections, reels, onAdd, onDelete, onRename, onM
     setEditingId(null)
   }
 
-  const handleDelete = async (id: string, keepReels: boolean) => {
-    await onDelete(id, keepReels)
-    setShowDeleteConfirm(null)
+  const handleBatchDelete = async () => {
+    await onBatchDelete([...selectedIds])
+    exitBatch()
   }
 
-  const handleMerge = async () => {
-    if (!mergeSource || !mergeTarget || mergeSource === mergeTarget) return
-    await onMerge(mergeSource, mergeTarget)
-    setShowMergePanel(false)
-    setMergeSource(null)
-    setMergeTarget(null)
+  const handleBatchMerge = async () => {
+    if (!batchMergeTarget) return
+    const sourceIds = [...selectedIds].filter(id => id !== batchMergeTarget)
+    await onBatchMerge(sourceIds, batchMergeTarget)
+    exitBatch()
   }
 
   const availableReels = reels.filter(r =>
@@ -73,35 +101,59 @@ export function Collections({ collections, reels, onAdd, onDelete, onRename, onM
           <h2 className="text-xl font-bold">Collections</h2>
           <p className="text-sm text-zinc-500">{collections.length} collections · {reels.filter(r => r.ingestStatus === 'complete').length} reels classified</p>
         </div>
-        <div className="flex items-center gap-2">
-          {onRetroactiveAutoAssign && reels.length > 0 && (
-            <button
-              onClick={async () => {
-                setRetroRunning(true)
-                setRetroResult(null)
-                try {
-                  const result = await onRetroactiveAutoAssign()
-                  setRetroResult(result)
-                } catch {
-                  setRetroResult({ processed: 0, assigned: 0 })
-                }
-                setRetroRunning(false)
-              }}
-              disabled={retroRunning}
-              className="flex items-center gap-1.5 px-3 min-h-[44px] bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
-            >
-              {retroRunning ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              Auto-Assign All
-            </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {batchMode ? (
+            <>
+              <span className="text-xs text-zinc-400">{selectedIds.size} selected</span>
+              <button onClick={selectAll}
+                className="flex items-center gap-1.5 px-3 min-h-[44px] bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm font-medium transition-colors">
+                {selectedIds.size === collections.length ? 'Deselect All' : 'Select All'}
+              </button>
+              <button onClick={() => setShowBatchMergePanel(true)} disabled={selectedIds.size < 2}
+                className="flex items-center gap-1.5 px-3 min-h-[44px] bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
+                <GitMerge size={14} /> Merge ({selectedIds.size})
+              </button>
+              <button onClick={() => setShowBatchDeleteConfirm(true)} disabled={selectedIds.size === 0}
+                className="flex items-center gap-1.5 px-3 min-h-[44px] bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
+                <Trash2 size={14} /> Delete ({selectedIds.size})
+              </button>
+              <button onClick={exitBatch}
+                className="flex items-center gap-1.5 px-3 min-h-[44px] bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm font-medium transition-colors">
+                <X size={14} /> Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              {onRetroactiveAutoAssign && reels.length > 0 && (
+                <button
+                  onClick={async () => {
+                    setRetroRunning(true)
+                    setRetroResult(null)
+                    try {
+                      const result = await onRetroactiveAutoAssign()
+                      setRetroResult(result)
+                    } catch {
+                      setRetroResult({ processed: 0, assigned: 0 })
+                    }
+                    setRetroRunning(false)
+                  }}
+                  disabled={retroRunning}
+                  className="flex items-center gap-1.5 px-3 min-h-[44px] bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {retroRunning ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  Auto-Assign All
+                </button>
+              )}
+              <button onClick={() => setBatchMode(true)}
+                className="flex items-center gap-1.5 px-3 min-h-[44px] bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm font-medium transition-colors">
+                <CheckSquare size={14} /> Select
+              </button>
+              <button onClick={() => setShowNew(true)}
+                className="flex items-center gap-1.5 px-3 min-h-[44px] bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
+                <Plus size={14} /> New
+              </button>
+            </>
           )}
-          <button onClick={() => setShowMergePanel(!showMergePanel)}
-            className={`flex items-center gap-1.5 px-3 min-h-[44px] rounded-lg text-sm font-medium transition-colors ${showMergePanel ? 'bg-amber-600 hover:bg-amber-500' : 'bg-zinc-700 hover:bg-zinc-600'}`}>
-            <GitMerge size={14} /> Merge
-          </button>
-          <button onClick={() => setShowNew(true)}
-            className="flex items-center gap-1.5 px-3 min-h-[44px] bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
-            <Plus size={14} /> New
-          </button>
         </div>
       </div>
 
@@ -111,36 +163,44 @@ export function Collections({ collections, reels, onAdd, onDelete, onRename, onM
         </div>
       )}
 
-      {/* Merge panel */}
-      {showMergePanel && (
+      {/* Batch delete confirm */}
+      {showBatchDeleteConfirm && (
+        <div className="bg-zinc-900 border border-red-500/30 rounded-xl p-4 space-y-3">
+          <h3 className="font-medium text-sm text-red-400">Delete {selectedIds.size} collections?</h3>
+          <p className="text-xs text-zinc-400">This removes the collections only. Reels are not affected.</p>
+          <div className="flex gap-2">
+            <button onClick={handleBatchDelete}
+              className="flex-1 min-h-[44px] bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium transition-colors">
+              Delete {selectedIds.size} Collections
+            </button>
+            <button onClick={() => setShowBatchDeleteConfirm(false)}
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors">
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Batch merge panel */}
+      {showBatchMergePanel && (
         <div className="bg-zinc-900 border border-amber-500/30 rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-medium text-sm text-amber-400">Merge Collections</h3>
-            <button onClick={() => { setShowMergePanel(false); setMergeSource(null); setMergeTarget(null) }}
+            <h3 className="font-medium text-sm text-amber-400">Merge {selectedIds.size} collections into one</h3>
+            <button onClick={() => setShowBatchMergePanel(false)}
               className="min-w-[36px] min-h-[36px] flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"><X size={16} /></button>
           </div>
-          <p className="text-xs text-zinc-500">Merge one collection into another. All reels from the source will be moved to the target.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-zinc-400 mb-1 block">Source (will be deleted)</label>
-              <select value={mergeSource || ''} onChange={e => setMergeSource(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 min-h-[48px] text-sm focus:outline-none focus:border-amber-500">
-                <option value="">Select source...</option>
-                {collections.map(c => <option key={c.id} value={c.id}>{c.name} ({c.reelIds?.length || 0} reels)</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-zinc-400 mb-1 block">Target (will keep all reels)</label>
-              <select value={mergeTarget || ''} onChange={e => setMergeTarget(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 min-h-[48px] text-sm focus:outline-none focus:border-amber-500">
-                <option value="">Select target...</option>
-                {collections.filter(c => c.id !== mergeSource).map(c => <option key={c.id} value={c.id}>{c.name} ({c.reelIds?.length || 0} reels)</option>)}
-              </select>
-            </div>
-          </div>
-          <button onClick={handleMerge} disabled={!mergeSource || !mergeTarget || mergeSource === mergeTarget}
+          <p className="text-xs text-zinc-500">All reels from selected collections will be merged into the target. Source collections will be deleted.</p>
+          <select value={batchMergeTarget || ''} onChange={e => setBatchMergeTarget(e.target.value)}
+            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 min-h-[48px] text-sm focus:outline-none focus:border-amber-500">
+            <option value="">Select target collection...</option>
+            {[...selectedIds].map(id => {
+              const c = collections.find(col => col.id === id)
+              return c ? <option key={id} value={id}>{c.name} ({c.reelIds?.length || 0} reels)</option> : null
+            })}
+          </select>
+          <button onClick={handleBatchMerge} disabled={!batchMergeTarget}
             className="w-full min-h-[48px] bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
-            Merge Collections
+            Merge into Target
           </button>
         </div>
       )}
@@ -170,21 +230,17 @@ export function Collections({ collections, reels, onAdd, onDelete, onRename, onM
         </div>
       )}
 
-      {/* Delete confirmation modal */}
+      {/* Delete single collection confirm */}
       {showDeleteConfirm && (
         <div className="bg-zinc-900 border border-red-500/30 rounded-xl p-4 space-y-3">
           <h3 className="font-medium text-sm text-red-400">Delete Collection?</h3>
           <p className="text-xs text-zinc-400">
-            "{collections.find(c => c.id === showDeleteConfirm)?.name}" has {collections.find(c => c.id === showDeleteConfirm)?.reelIds?.length || 0} reels.
+            "{collections.find(c => c.id === showDeleteConfirm)?.name}" — {collections.find(c => c.id === showDeleteConfirm)?.reelIds?.length || 0} reels will be unaffected.
           </p>
           <div className="flex gap-2">
-            <button onClick={() => handleDelete(showDeleteConfirm, true)}
-              className="flex-1 min-h-[44px] bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm font-medium transition-colors">
-              Delete Collection Only
-            </button>
-            <button onClick={() => handleDelete(showDeleteConfirm, false)}
+            <button onClick={async () => { await onDelete(showDeleteConfirm, true); setShowDeleteConfirm(null) }}
               className="flex-1 min-h-[44px] bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium transition-colors">
-              Delete Everything
+              Delete Collection
             </button>
             <button onClick={() => setShowDeleteConfirm(null)}
               className="min-w-[44px] min-h-[44px] flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors">
@@ -194,7 +250,7 @@ export function Collections({ collections, reels, onAdd, onDelete, onRename, onM
         </div>
       )}
 
-      {/* Add reel to collection panel */}
+      {/* Add reel panel */}
       {showAddReelPanel && (
         <div className="bg-zinc-900 border border-indigo-500/30 rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -209,9 +265,7 @@ export function Collections({ collections, reels, onAdd, onDelete, onRename, onM
               <p className="text-xs text-zinc-500 py-4 text-center">All reels already in this collection.</p>
             )}
             {availableReels.map(r => (
-              <button key={r.id} onClick={async () => {
-                await onAddReel(showAddReelPanel, r.id)
-              }}
+              <button key={r.id} onClick={async () => { await onAddReel(showAddReelPanel, r.id) }}
                 className="w-full flex items-center gap-2 px-3 min-h-[40px] rounded-lg text-xs hover:bg-zinc-800/50 transition-colors text-left group"
               >
                 <Tag size={10} className="text-zinc-500 shrink-0" />
@@ -230,12 +284,22 @@ export function Collections({ collections, reels, onAdd, onDelete, onRename, onM
           const reelCount = c.reelIds?.length || 0
           const isExpanded = expandedId === c.id
           const collectionReels = reels.filter(r => c.reelIds?.includes(r.id))
+          const isSelected = selectedIds.has(c.id)
 
           return (
-            <div key={c.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+            <div key={c.id} className={`bg-zinc-900 border rounded-xl overflow-hidden transition-colors ${isSelected ? 'border-indigo-500/50 bg-indigo-500/5' : 'border-zinc-800'}`}>
               <div className="flex items-center gap-3 p-4 min-h-[56px] cursor-pointer hover:bg-zinc-800/50 transition-colors"
-                onClick={() => setExpandedId(isExpanded ? null : c.id)}>
-                <div className="w-3 h-3 rounded-full shrink-0" style={{ background: c.color }} />
+                onClick={() => {
+                  if (batchMode) { toggleSelect(c.id); return }
+                  setExpandedId(isExpanded ? null : c.id)
+                }}>
+                {batchMode ? (
+                  <div className="shrink-0">
+                    {isSelected ? <CheckSquare size={18} className="text-indigo-400" /> : <Square size={18} className="text-zinc-600" />}
+                  </div>
+                ) : (
+                  <div className="w-3 h-3 rounded-full shrink-0" style={{ background: c.color }} />
+                )}
                 <FolderOpen size={16} className="text-zinc-400 shrink-0" />
                 <div className="flex-1 min-w-0">
                   {editingId === c.id ? (
@@ -255,7 +319,7 @@ export function Collections({ collections, reels, onAdd, onDelete, onRename, onM
                   )}
                 </div>
                 <span className="text-xs text-zinc-500 shrink-0">{reelCount} reels</span>
-                {editingId !== c.id && (
+                {editingId !== c.id && !batchMode && (
                   <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                     <button onClick={() => { setEditingId(c.id); setEditName(c.name) }}
                       className="min-w-[36px] min-h-[36px] flex items-center justify-center text-zinc-600 hover:text-indigo-400 transition-colors">
@@ -271,6 +335,9 @@ export function Collections({ collections, reels, onAdd, onDelete, onRename, onM
                     </button>
                     <ChevronRight size={14} className={`text-zinc-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                   </div>
+                )}
+                {!batchMode && (
+                  <ChevronRight size={14} className={`text-zinc-500 transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}`} />
                 )}
               </div>
               {isExpanded && collectionReels.length > 0 && (

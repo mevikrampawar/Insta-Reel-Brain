@@ -92,6 +92,43 @@ export function useCollections(userId: string | undefined) {
     await fetch()
   }, [userId, collections, fetch])
 
+  const batchDeleteCollections = useCallback(async (ids: string[]) => {
+    if (!userId || ids.length === 0) return
+    for (const id of ids) {
+      await deleteDoc(doc(db, 'users', userId, 'collections', id))
+    }
+    await fetch()
+  }, [userId, fetch])
+
+  const batchMergeCollections = useCallback(async (sourceIds: string[], targetId: string) => {
+    if (!userId || sourceIds.length === 0) return
+    const target = collections.find(c => c.id === targetId)
+    if (!target) return
+
+    let allReelIds = [...(target.reelIds || [])]
+    for (const sourceId of sourceIds) {
+      if (sourceId === targetId) continue
+      const source = collections.find(c => c.id === sourceId)
+      if (source) {
+        allReelIds = [...allReelIds, ...(source.reelIds || [])]
+        await deleteDoc(doc(db, 'users', userId, 'collections', sourceId))
+      }
+    }
+    const uniqueReelIds = [...new Set(allReelIds)]
+    await updateDoc(doc(db, 'users', userId, 'collections', targetId), { reelIds: uniqueReelIds })
+    await fetch()
+  }, [userId, collections, fetch])
+
+  const batchRemoveReels = useCallback(async (collectionIds: string[], reelIds: string[]) => {
+    if (!userId) return
+    for (const cid of collectionIds) {
+      for (const rid of reelIds) {
+        await updateDoc(doc(db, 'users', userId, 'collections', cid), { reelIds: arrayRemove(rid) })
+      }
+    }
+    await fetch()
+  }, [userId, fetch])
+
   const assignReelsByCategory = useCallback(async (reels: { id: string; primaryCategory?: string }[]) => {
     if (!userId) return { processed: 0, assigned: 0 }
 
@@ -163,6 +200,9 @@ export function useCollections(userId: string | undefined) {
     addReelToCollection,
     removeReelFromCollection,
     mergeCollections,
+    batchDeleteCollections,
+    batchMergeCollections,
+    batchRemoveReels,
     assignReelsByCategory,
   }
 }
