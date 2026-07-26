@@ -80,7 +80,7 @@ export function Chat({ reels, apiKey }: Props) {
             <div className="flex flex-wrap justify-center gap-2 text-xs">
               {['What are the main topics I save?', 'Summarize fitness tips', 'Find reels about productivity'].map(q => (
                 <button key={q} onClick={() => setInput(q)}
-                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white transition-colors">
+                  className="px-3 min-h-[40px] bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white transition-colors">
                   {q}
                 </button>
               ))}
@@ -116,10 +116,10 @@ export function Chat({ reels, apiKey }: Props) {
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
             placeholder={apiKey ? "Ask about your Reels..." : "Add API key in Settings first..."}
             disabled={!apiKey}
-            className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors disabled:opacity-50"
+            className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-4 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500 transition-colors disabled:opacity-50"
           />
           <button onClick={handleSend} disabled={loading || !input.trim() || !apiKey}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg transition-colors">
+            className="min-w-[48px] min-h-[48px] flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg transition-colors">
             <Send size={16} />
           </button>
         </div>

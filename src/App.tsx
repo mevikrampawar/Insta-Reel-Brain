@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useAuth } from './hooks/useAuth'
 import { useReels } from './hooks/useReels'
 import { useCollections } from './hooks/useCollections'
@@ -14,23 +14,56 @@ import { Collections } from './components/Collections'
 import { Settings } from './components/Settings'
 import { DataSources } from './components/DataSources'
 
+const VALID_TABS = ['library', 'ingest', 'chat', 'graph', 'collections', 'datasources', 'settings']
+
+function getInitialTab(): string {
+  // 1. Check URL hash
+  const hash = window.location.hash.slice(1)
+  if (hash && VALID_TABS.includes(hash)) return hash
+  // 2. Check localStorage
+  try {
+    const stored = localStorage.getItem('reelbrain-tab')
+    if (stored && VALID_TABS.includes(stored)) return stored
+  } catch { /* ignore */ }
+  return 'library'
+}
+
 function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAuth>['user']>; logout: () => void }) {
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel } = useReels(user.uid)
   const { collections, addCollection, deleteCollection, addReelToCollection, autoAssignCollections } = useCollections(user.uid)
   const { apiKey, apifyApiKey } = useApiKey()
   const { jobs, addJob, removeJob } = useScrapeQueue(apifyApiKey, apiKey, addReel, updateReel, autoAssignCollections)
-  const [nav, setNav] = useState<NavState>({ tab: 'library' })
+  const [nav, setNav] = useState<NavState>({ tab: getInitialTab() })
+
+  // Persist tab to localStorage + URL hash
+  const handleNavChange = useCallback((newNav: NavState) => {
+    setNav(newNav)
+    try { localStorage.setItem('reelbrain-tab', newNav.tab) } catch { /* ignore */ }
+    window.history.replaceState(null, '', `#${newNav.tab}`)
+  }, [])
+
+  // Handle browser back/forward
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash.slice(1)
+      if (hash && VALID_TABS.includes(hash)) {
+        setNav(prev => prev.tab === hash ? prev : { tab: hash })
+      }
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
 
   const navigateToReel = useCallback((reelId: string) => {
-    setNav({ tab: 'library', highlightReelId: reelId })
-  }, [])
+    handleNavChange({ tab: 'library', highlightReelId: reelId })
+  }, [handleNavChange])
 
   const clearHighlight = useCallback(() => {
     setNav(prev => ({ ...prev, highlightReelId: undefined }))
   }, [])
 
   return (
-    <Layout nav={nav} onNavChange={setNav} onLogout={logout} userPhoto={user.photoURL || undefined}>
+    <Layout nav={nav} onNavChange={handleNavChange} onLogout={logout} userPhoto={user.photoURL || undefined}>
       {reelsLoading && nav.tab === 'library' && (
         <div className="flex items-center justify-center h-full">
           <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -54,7 +87,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           removeJob={removeJob}
           apiKey={apiKey}
           apifyApiKey={apifyApiKey}
-          onSwitchToLibrary={() => setNav({ tab: 'library' })}
+          onSwitchToLibrary={() => handleNavChange({ tab: 'library' })}
         />
       )}
       {nav.tab === 'chat' && <Chat reels={reels} apiKey={apiKey} />}

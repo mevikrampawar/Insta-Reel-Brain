@@ -146,23 +146,23 @@ function FieldCard({ icon, title, badge, badgeCls, desc, link, linkText, linkHin
         {!state.savedFlash && unsaved && has && <span className="ml-auto flex items-center gap-1 text-xs text-amber-400"><AlertCircle size={12} /> Unsaved</span>}
       </div>
       <p className="text-sm text-zinc-400">{desc}</p>
-      <div className="flex items-center gap-2 text-xs text-zinc-500">
+      <div className="flex items-center gap-2 text-xs text-zinc-500 flex-wrap">
         <a href={link} target="_blank" rel="noopener" className={`inline-flex items-center gap-1 ${linkCls}`}>{linkText} <ExternalLink size={10} /></a>
         <span>{linkHint}</span>
       </div>
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-col sm:flex-row">
         <div className="relative flex-1">
           <input type={showKey ? 'text' : 'password'} value={state.local} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors font-mono" />
+            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500 transition-colors font-mono" />
           <button onClick={onToggleShow} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500 hover:text-zinc-300">{showKey ? 'Hide' : 'Show'}</button>
         </div>
-        {has && <button onClick={onClear} className="px-3 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-zinc-400 hover:text-red-400 transition-colors" title="Clear"><Trash2 size={14} /></button>}
+        {has && <button onClick={onClear} className="min-w-[48px] min-h-[48px] flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-zinc-400 hover:text-red-400 transition-colors" title="Clear"><Trash2 size={14} /></button>}
       </div>
-      <div className="flex items-center gap-2">
-        <button onClick={onSave} disabled={!unsaved || state.saving} className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-medium transition-colors">
+      <div className="flex items-center gap-2 flex-wrap">
+        <button onClick={onSave} disabled={!unsaved || state.saving} className="flex items-center gap-1.5 px-3 min-h-[44px] bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-medium transition-colors">
           {state.saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} {state.saving ? 'Saving...' : 'Save'}
         </button>
-        <button onClick={onTest} disabled={!has || state.testing} className="flex items-center gap-1.5 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed border border-zinc-700 rounded-lg text-xs font-medium text-zinc-300 transition-colors">
+        <button onClick={onTest} disabled={!has || state.testing} className="flex items-center gap-1.5 px-3 min-h-[44px] bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed border border-zinc-700 rounded-lg text-xs font-medium text-zinc-300 transition-colors">
           {state.testing ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />} {state.testing ? 'Testing...' : 'Test'}
         </button>
         {state.testResult === 'ok' && <span className="flex items-center gap-1 text-xs text-emerald-400"><Check size={12} /> Connected</span>}

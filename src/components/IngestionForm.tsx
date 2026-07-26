@@ -84,13 +84,13 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
             onChange={e => setUrl(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSubmit()}
             placeholder="https://www.instagram.com/reel/..."
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-10 pr-4 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500 transition-colors"
           />
         </div>
         <button
           onClick={handleSubmit}
           disabled={!url.trim() || !hasApify}
-          className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium text-sm transition-colors flex items-center gap-2"
+          className="min-w-[48px] min-h-[48px] flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium text-sm transition-colors"
         >
           <ArrowRight size={16} />
         </button>
@@ -103,16 +103,16 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
             const Icon = ui.icon
             const spinning = job.phase === 'scraping' || job.phase === 'analyzing'
             return (
-              <div key={job.id} className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg">
+              <div key={job.id} className="flex items-center gap-3 px-4 min-h-[48px] bg-zinc-900 border border-zinc-800 rounded-lg">
                 <Icon size={14} className={`${ui.color} ${spinning ? 'animate-spin' : ''}`} />
                 <span className={`text-sm ${ui.color}`}>{ui.label}</span>
                 <span className="text-xs text-zinc-600 truncate flex-1">{shortUrl(job.url)}</span>
                 {job.phase === 'failed' && (
-                  <button onClick={() => { addJob(job.url); removeJob(job.id) }} className="text-xs text-zinc-500 hover:text-white flex items-center gap-1">
-                    <RefreshCw size={11} /> Retry
+                  <button onClick={() => { addJob(job.url); removeJob(job.id) }} className="min-w-[36px] min-h-[36px] flex items-center justify-center text-xs text-zinc-500 hover:text-white">
+                    <RefreshCw size={11} />
                   </button>
                 )}
-                <button onClick={() => removeJob(job.id)} className="text-zinc-700 hover:text-zinc-400">
+                <button onClick={() => removeJob(job.id)} className="min-w-[36px] min-h-[36px] flex items-center justify-center text-zinc-700 hover:text-zinc-400">
                   <XCircle size={13} />
                 </button>
               </div>

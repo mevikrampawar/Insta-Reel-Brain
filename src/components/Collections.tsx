@@ -33,7 +33,7 @@ export function Collections({ collections, reels, onAdd, onDelete, onReelClick }
           <p className="text-sm text-zinc-500">{collections.length} collections</p>
         </div>
         <button onClick={() => setShowNew(true)}
-          className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
+          className="flex items-center gap-1.5 px-3 min-h-[44px] bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
           <Plus size={14} /> New
         </button>
       </div>
@@ -46,18 +46,18 @@ export function Collections({ collections, reels, onAdd, onDelete, onReelClick }
             <button onClick={() => setShowNew(false)} className="text-zinc-500 hover:text-white"><X size={16} /></button>
           </div>
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Collection name"
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500" autoFocus />
+            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500" autoFocus />
           <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Description (optional)"
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500" />
+            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500" />
           <div className="flex items-center gap-2">
             {COLORS.map(c => (
               <button key={c} onClick={() => setColor(c)}
-                className={`w-6 h-6 rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-white' : ''}`}
+                className={`min-w-[36px] min-h-[36px] rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-white' : ''}`}
                 style={{ background: c }} />
             ))}
           </div>
           <button onClick={handleCreate} disabled={!name.trim()}
-            className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
+            className="w-full min-h-[48px] bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
             Create
           </button>
         </div>
@@ -72,7 +72,7 @@ export function Collections({ collections, reels, onAdd, onDelete, onReelClick }
 
           return (
             <div key={c.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-              <div className="flex items-center gap-3 p-4 cursor-pointer hover:bg-zinc-800/50 transition-colors"
+              <div className="flex items-center gap-3 p-4 min-h-[56px] cursor-pointer hover:bg-zinc-800/50 transition-colors"
                 onClick={() => setExpandedId(isExpanded ? null : c.id)}>
                 <div className="w-3 h-3 rounded-full shrink-0" style={{ background: c.color }} />
                 <FolderOpen size={16} className="text-zinc-400 shrink-0" />
@@ -83,7 +83,7 @@ export function Collections({ collections, reels, onAdd, onDelete, onReelClick }
                 <span className="text-xs text-zinc-500 shrink-0">{reelCount} reels</span>
                 <ChevronRight size={14} className={`text-zinc-500 transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}`} />
                 <button onClick={(e) => { e.stopPropagation(); onDelete(c.id) }}
-                  className="text-zinc-600 hover:text-red-400 transition-colors shrink-0">
+                  className="min-w-[36px] min-h-[36px] flex items-center justify-center text-zinc-600 hover:text-red-400 transition-colors shrink-0">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -93,7 +93,7 @@ export function Collections({ collections, reels, onAdd, onDelete, onReelClick }
                     <button
                       key={r.id}
                       onClick={() => onReelClick?.(r.id)}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs hover:bg-zinc-800/50 transition-colors text-left group"
+                      className="w-full flex items-center gap-2 px-3 min-h-[40px] rounded-lg text-xs hover:bg-zinc-800/50 transition-colors text-left group"
                     >
                       <Tag size={10} className="text-zinc-500 shrink-0" />
                       <span className="truncate flex-1 text-zinc-300 group-hover:text-white transition-colors">{r.title || 'Untitled'}</span>

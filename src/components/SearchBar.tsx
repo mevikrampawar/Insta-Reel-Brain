@@ -46,7 +46,7 @@ export function SearchBar({ reels, onResults }: Props) {
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
             placeholder="Search your reels..."
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-10 pr-9 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-10 pr-9 min-h-[48px] text-sm focus:outline-none focus:border-indigo-500 transition-colors"
           />
           {query && (
             <button onClick={handleClear} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
@@ -57,7 +57,7 @@ export function SearchBar({ reels, onResults }: Props) {
         <button
           onClick={handleSearch}
           disabled={loading || !query.trim()}
-          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 shrink-0"
+          className="min-h-[48px] px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 shrink-0"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
           <span className="hidden sm:inline">Search</span>
@@ -65,10 +65,10 @@ export function SearchBar({ reels, onResults }: Props) {
       </div>
 
       {/* Mode toggle — clear labels */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <button
           onClick={() => { setMode('semantic'); if (hasSearched && query.trim()) handleSearch() }}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg text-xs font-medium transition-colors ${
             mode === 'semantic'
               ? 'bg-indigo-500/15 border border-indigo-500/30 text-indigo-400'
               : 'bg-zinc-800 border border-zinc-700 text-zinc-500 hover:text-zinc-300'
@@ -78,7 +78,7 @@ export function SearchBar({ reels, onResults }: Props) {
         </button>
         <button
           onClick={() => { setMode('keyword'); if (hasSearched && query.trim()) handleSearch() }}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg text-xs font-medium transition-colors ${
             mode === 'keyword'
               ? 'bg-indigo-500/15 border border-indigo-500/30 text-indigo-400'
               : 'bg-zinc-800 border border-zinc-700 text-zinc-500 hover:text-zinc-300'

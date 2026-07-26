@@ -5,7 +5,6 @@ import type { Collection } from '../types'
 
 const getUserCollections = (uid: string) => collection(db, 'users', uid, 'collections')
 
-// Color palette for auto-collections
 const AUTO_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#8b5cf6', '#f97316', '#14b8a6', '#e11d48']
 
 export function useCollections(userId: string | undefined) {
@@ -17,7 +16,10 @@ export function useCollections(userId: string | undefined) {
     setLoading(true)
     try {
       const snap = await getDocs(query(getUserCollections(userId), orderBy('createdAt', 'desc')))
-      setCollections(snap.docs.map(d => ({ id: d.id, ...d.data() } as Collection)))
+      setCollections(snap.docs.map(d => {
+        const data = d.data()
+        return { id: d.id, ...data, isAuto: data.isAuto ?? false } as Collection
+      }))
     } finally {
       setLoading(false)
     }
@@ -49,45 +51,65 @@ export function useCollections(userId: string | undefined) {
     await fetch()
   }, [userId, fetch])
 
-  // Auto-create collections from tags and concepts, then add reel to matching ones
   const autoAssignCollections = useCallback(async (reelId: string, tags: string[], concepts: { conceptName: string; conceptType: string }[]) => {
     if (!userId) return
 
+    // Fresh read from Firestore
     const snap = await getDocs(getUserCollections(userId))
-    const existing = snap.docs.map(d => ({ id: d.id, ...d.data() } as Collection))
+    const existing = snap.docs.map(d => {
+      const data = d.data()
+      return { id: d.id, ...data, isAuto: data.isAuto ?? false } as Collection
+    })
 
-    // Build collection names from tags + concepts
-    const autoNames = new Set<string>()
+    // Build collection names from top tags + concepts (limit to avoid explosion)
+    const namesToCreate: string[] = []
+    const seen = new Set<string>()
+
     for (const tag of tags.slice(0, 3)) {
-      autoNames.add(tag.toLowerCase())
+      const name = tag.toLowerCase().trim()
+      if (name && !seen.has(name)) { seen.add(name); namesToCreate.push(name) }
     }
     for (const c of concepts.slice(0, 3)) {
-      autoNames.add(c.conceptName.toLowerCase())
+      const name = c.conceptName.toLowerCase().trim()
+      if (name && !seen.has(name)) { seen.add(name); namesToCreate.push(name) }
     }
 
+    if (namesToCreate.length === 0) return
+
     let colorIdx = existing.length
-    for (const name of autoNames) {
-      // Check if auto-collection with this name already exists
-      const existingAuto = existing.find(c => c.isAuto && c.name.toLowerCase() === name)
+
+    for (const name of namesToCreate) {
+      // Find existing auto-collection with this name (case-insensitive)
+      const existingAuto = existing.find(c => c.name.toLowerCase() === name)
+
       if (existingAuto) {
-        // Just add reel to existing collection
-        if (!existingAuto.reelIds?.includes(reelId)) {
-          await updateDoc(doc(db, 'users', userId, 'collections', existingAuto.id), { reelIds: arrayUnion(reelId) })
+        // Add reel to existing collection if not already there
+        const reelIds = existingAuto.reelIds || []
+        if (!reelIds.includes(reelId)) {
+          try {
+            await updateDoc(doc(db, 'users', userId, 'collections', existingAuto.id), {
+              reelIds: arrayUnion(reelId)
+            })
+          } catch { /* skip */ }
         }
       } else {
         // Create new auto-collection
-        await addDoc(getUserCollections(userId), {
-          userId,
-          name,
-          description: `Auto-generated from reel tags`,
-          color: AUTO_COLORS[colorIdx % AUTO_COLORS.length],
-          reelIds: [reelId],
-          isAuto: true,
-          createdAt: Date.now(),
-        })
-        colorIdx++
+        try {
+          await addDoc(getUserCollections(userId), {
+            userId,
+            name,
+            description: 'Auto-generated from reel content',
+            color: AUTO_COLORS[colorIdx % AUTO_COLORS.length],
+            reelIds: [reelId],
+            isAuto: true,
+            createdAt: Date.now(),
+          })
+          colorIdx++
+        } catch { /* skip */ }
       }
     }
+
+    // Refresh collections state
     await fetch()
   }, [userId, fetch])
 
