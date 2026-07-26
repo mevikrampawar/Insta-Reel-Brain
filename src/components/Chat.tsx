@@ -4,7 +4,7 @@ import type { Reel } from '../types'
 import { chatWithLibrary } from '../services/groq'
 import { keywordSearch } from '../utils/search'
 
-interface Props { reels: Reel[]; apiKey: string }
+interface Props { reels: Reel[]; apiKey: string; onReelClick?: (reelId: string) => void }
 
 interface Message {
   role: 'user' | 'assistant'
@@ -29,7 +29,7 @@ function saveHistory(msgs: Message[]) {
   } catch { /* ignore */ }
 }
 
-export function Chat({ reels, apiKey }: Props) {
+export function Chat({ reels, apiKey, onReelClick }: Props) {
   const [messages, setMessages] = useState<Message[]>(loadHistory)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -165,10 +165,13 @@ export function Chat({ reels, apiKey }: Props) {
                   <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 font-medium">Sources</p>
                   <div className="flex flex-wrap gap-1">
                     {m.citations.map((c, ci) => (
-                      <span key={ci} className="inline-flex items-center gap-1 text-[10px] text-zinc-400 bg-zinc-700/30 px-1.5 py-0.5 rounded">
+                      <button key={ci}
+                        onClick={() => onReelClick?.(c.reelId)}
+                        className="inline-flex items-center gap-1 text-[10px] text-zinc-400 bg-zinc-700/30 px-1.5 py-0.5 rounded hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors cursor-pointer"
+                      >
                         <Hash size={8} className="text-indigo-400" />
                         {c.title.slice(0, 20)}{c.title.length > 20 ? '...' : ''} by @{c.creator}
-                      </span>
+                      </button>
                     ))}
                   </div>
                 </div>

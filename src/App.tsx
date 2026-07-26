@@ -61,6 +61,10 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
     handleNavChange({ tab: 'library', highlightReelId: reelId })
   }, [handleNavChange])
 
+  const navigateToLibraryFiltered = useCallback((filters: { categories?: string[]; creator?: string }, highlightReelId?: string) => {
+    handleNavChange({ tab: 'library', highlightReelId, libraryFilters: filters })
+  }, [handleNavChange])
+
   const clearHighlight = useCallback(() => {
     setNav(prev => ({ ...prev, highlightReelId: undefined }))
   }, [])
@@ -109,7 +113,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
 
   return (
     <Layout nav={nav} onNavChange={handleNavChange} onLogout={logout} userPhoto={user.photoURL || undefined}>
-      {nav.tab === 'dashboard' && <DashboardView reels={reels} collections={collections} onReelClick={navigateToReel} />}
+      {nav.tab === 'dashboard' && <DashboardView reels={reels} collections={collections} onReelClick={navigateToReel} onFilterNavigate={navigateToLibraryFiltered} />}
       {reelsLoading && nav.tab === 'library' && (
         <div className="flex items-center justify-center h-full">
           <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -126,6 +130,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           highlightReelId={nav.highlightReelId}
           onClearHighlight={clearHighlight}
           onReAnalyze={handleReAnalyze}
+          libraryFilters={nav.libraryFilters}
         />
       )}
       {nav.tab === 'ingest' && (
@@ -138,7 +143,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           onSwitchToLibrary={() => handleNavChange({ tab: 'library' })}
         />
       )}
-      {nav.tab === 'chat' && <Chat reels={reels} apiKey={apiKey} />}
+      {nav.tab === 'chat' && <Chat reels={reels} apiKey={apiKey} onReelClick={navigateToReel} />}
       {nav.tab === 'graph' && <NeuralGraph reels={reels} collections={collections} onReelClick={navigateToReel} />}
       {nav.tab === 'collections' && (
         <Collections

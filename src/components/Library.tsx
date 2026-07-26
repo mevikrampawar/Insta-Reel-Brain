@@ -16,6 +16,7 @@ interface Props {
   highlightReelId?: string
   onClearHighlight?: () => void
   onReAnalyze?: (ids: string[]) => void
+  libraryFilters?: { categories?: string[]; creator?: string }
 }
 
 type SortKey = 'newest' | 'oldest' | 'mostEngaged' | 'mostViewed' | 'highestQuality' | 'mostTalked'
@@ -78,7 +79,7 @@ function dateInRange(reel: Reel, range: DateRange): boolean {
   return d >= now - ms
 }
 
-export function Library({ reels, onDelete, onDeleteBulk, collections, userId, onAddToCollection, highlightReelId, onClearHighlight, onReAnalyze }: Props) {
+export function Library({ reels, onDelete, onDeleteBulk, collections, userId, onAddToCollection, highlightReelId, onClearHighlight, onReAnalyze, libraryFilters }: Props) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [filters, setFilters] = useState<Filters>({ status: 'all', collection: 'all', categories: [], sentiments: [], qualityMin: 0, creator: 'all', dateRange: 'all' })
   const [sort, setSort] = useState<SortKey>('newest')
@@ -89,6 +90,16 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
   const [showSortMenu, setShowSortMenu] = useState(false)
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const reelRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  // Apply filters from external navigation (e.g. Dashboard clicking a category)
+  useEffect(() => {
+    if (!libraryFilters) return
+    setFilters(prev => ({
+      ...prev,
+      categories: libraryFilters.categories || prev.categories,
+      creator: libraryFilters.creator || prev.creator,
+    }))
+  }, [libraryFilters])
 
   // Extract unique creators for filter dropdown
   const topCreators = useMemo(() => {
@@ -495,6 +506,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
               onDelete={onDelete}
               collections={collections}
               onAddToCollection={onAddToCollection}
+              onReAnalyze={onReAnalyze ? () => onReAnalyze([reel.id]) : undefined}
             />
           </div>
         ))}

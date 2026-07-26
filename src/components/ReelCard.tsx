@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ExternalLink, Tag, Clock, Trash2, ChevronDown, ChevronUp, AlertCircle, FolderPlus, StickyNote, Heart, MessageCircle, Play, Eye, Music, MapPin, Users, Shield, BookOpen, Package, Wrench, User, Globe, Smartphone, GraduationCap, Star } from 'lucide-react'
+import { ExternalLink, Tag, Clock, Trash2, ChevronDown, ChevronUp, AlertCircle, FolderPlus, StickyNote, Heart, MessageCircle, Play, Eye, Music, MapPin, Users, Shield, BookOpen, Package, Wrench, User, Globe, Smartphone, GraduationCap, Star, RefreshCw } from 'lucide-react'
 import type { Reel, Collection } from '../types'
 import { useNotes } from '../hooks/useNotes'
 import { Notes } from './Notes'
@@ -12,6 +12,7 @@ interface Props {
   onDelete: (id: string) => void
   collections?: Collection[]
   onAddToCollection?: (reelId: string, collectionId: string) => void
+  onReAnalyze?: (id: string) => void
 }
 
 function formatDuration(sec: number): string {
@@ -21,7 +22,7 @@ function formatDuration(sec: number): string {
   return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`
 }
 
-export function ReelCard({ reel, userId, onDelete, collections, onAddToCollection }: Props) {
+export function ReelCard({ reel, userId, onDelete, collections, onAddToCollection, onReAnalyze }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [showCollections, setShowCollections] = useState(false)
@@ -86,6 +87,13 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
                   title="Open original">
                   <ExternalLink size={13} />
                 </a>
+              )}
+              {onReAnalyze && (
+                <button onClick={() => onReAnalyze(reel.id)}
+                  className="p-1.5 text-zinc-600 hover:text-amber-400 transition-colors rounded-lg"
+                  title="Re-analyze">
+                  <RefreshCw size={13} />
+                </button>
               )}
               <button onClick={() => setShowNotes(!showNotes)}
                 className={`p-1.5 rounded-lg transition-colors ${showNotes ? 'bg-amber-500/10 text-amber-400' : 'text-zinc-600 hover:text-amber-400'}`}

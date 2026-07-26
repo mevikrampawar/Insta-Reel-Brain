@@ -5,6 +5,10 @@ import { Brain, LogOut, Plus, FolderOpen, MessageSquare, Settings as SettingsIco
 export interface NavState {
   tab: string
   highlightReelId?: string
+  libraryFilters?: {
+    categories?: string[]
+    creator?: string
+  }
 }
 
 interface Props {
