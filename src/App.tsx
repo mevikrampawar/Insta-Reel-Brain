@@ -36,7 +36,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel, deleteReelsBulk } = useReels(user.uid)
   const { collections, addCollection, deleteCollection, renameCollection, addReelToCollection, removeReelFromCollection, batchDeleteCollections, batchMergeCollections, assignReelsByCategory } = useCollections(user.uid)
   const apiCtx = useApiKey()
-  const { jobs, addJob, removeJob } = useScrapeQueue(apiCtx.apifyApiKey, apiCtx.apiKey, addReel, updateReel, assignReelsByCategory)
+  const { jobs, addJob, removeJob } = useScrapeQueue(apiCtx.apifyApiKey, apiCtx.apiKey, addReel, updateReel, assignReelsByCategory, (apiCtx.isUsingMasterGroq || apiCtx.isUsingMasterApify) ? apiCtx.incrementMasterUsage : undefined)
   const [nav, setNav] = useState<NavState>({ tab: getInitialTab() })
   const [clipboardUrl, setClipboardUrl] = useState<string | null>(null)
   const [firstRun] = useState(() => {
@@ -260,6 +260,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           masterUsageLimit={apiCtx.masterUsageLimit}
           isUsingMasterKeys={apiCtx.isUsingMasterGroq || apiCtx.isUsingMasterApify}
           hasOwnKeys={apiCtx.hasOwnGroqKey && apiCtx.hasOwnApifyKey}
+          canUseMasterKey={apiCtx.canUseMasterKey}
           onGoToSettings={() => handleNavChange({ tab: 'settings' })}
         />
       )}

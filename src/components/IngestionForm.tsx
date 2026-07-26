@@ -15,6 +15,7 @@ interface Props {
   masterUsageLimit?: number
   isUsingMasterKeys?: boolean
   hasOwnKeys?: boolean
+  canUseMasterKey?: boolean
   onGoToSettings?: () => void
 }
 
@@ -34,10 +35,11 @@ function shortUrl(url: string) {
   } catch { return url.slice(0, 40) }
 }
 
-export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, onSwitchToLibrary, clipboardUrl, onDismissClipboard, masterUsageCount = 0, masterUsageLimit = 5, isUsingMasterKeys = false, hasOwnKeys = false, onGoToSettings }: Props) {
+export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, onSwitchToLibrary, clipboardUrl, onDismissClipboard, masterUsageCount = 0, masterUsageLimit = 5, isUsingMasterKeys = false, hasOwnKeys = false, canUseMasterKey = true, onGoToSettings }: Props) {
   const [url, setUrl] = useState('')
   const hasApify = !!apifyApiKey.trim()
   const freeRemaining = Math.max(0, masterUsageLimit - masterUsageCount)
+  const limitReached = isUsingMasterKeys && !hasOwnKeys && !canUseMasterKey
 
   useEffect(() => {
     if (clipboardUrl && !url) setUrl(clipboardUrl)
@@ -84,26 +86,26 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
 
       {/* Free tier usage banner */}
       {isUsingMasterKeys && !hasOwnKeys && (
-        <div className={`rounded-xl p-3 flex items-center gap-3 text-xs ${freeRemaining <= 2 ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-indigo-500/10 border border-indigo-500/20'}`}>
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${freeRemaining <= 2 ? 'bg-amber-500/20' : 'bg-indigo-500/20'}`}>
-            {freeRemaining <= 2 ? <AlertCircle size={14} className="text-amber-400" /> : <Sparkles size={14} className="text-indigo-400" />}
+        <div className={`rounded-xl p-3 flex items-center gap-3 text-xs ${freeRemaining <= 2 || limitReached ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-indigo-500/10 border border-indigo-500/20'}`}>
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${freeRemaining <= 2 || limitReached ? 'bg-amber-500/20' : 'bg-indigo-500/20'}`}>
+            {limitReached ? <AlertCircle size={14} className="text-amber-400" /> : <Sparkles size={14} className="text-indigo-400" />}
           </div>
           <div className="flex-1 min-w-0">
-            {freeRemaining > 0 ? (
+            {limitReached ? (
+              <p className="text-amber-300">
+                <span className="font-medium">Free trial used up ({masterUsageLimit} reels).</span>
+                <span className="text-zinc-500"> Add your own API keys to continue — both are free to get.</span>
+              </p>
+            ) : freeRemaining > 0 ? (
               <p className={freeRemaining <= 2 ? 'text-amber-300' : 'text-indigo-300'}>
                 <span className="font-medium">{freeRemaining} free reel{freeRemaining !== 1 ? 's' : ''} remaining</span>
                 <span className="text-zinc-500"> — add your own API keys for unlimited use</span>
               </p>
-            ) : (
-              <p className="text-amber-300">
-                <span className="font-medium">Free trial used up.</span>
-                <span className="text-zinc-500"> Add your own API keys to continue — both are free to get.</span>
-              </p>
-            )}
+            ) : null}
           </div>
           {onGoToSettings && (
             <button onClick={onGoToSettings} className="flex items-center gap-1 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-zinc-300 shrink-0 transition-colors">
-              <Settings size={12} /> Keys
+              <Settings size={12} /> {limitReached ? 'Add Keys' : 'Keys'}
             </button>
           )}
         </div>
@@ -175,7 +177,7 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
         </div>
           <button
             onClick={handleSubmit}
-            disabled={!url.trim() || !hasApify}
+            disabled={!url.trim() || !hasApify || limitReached}
             aria-label="Submit URL"
             className="min-w-[48px] min-h-[48px] flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium text-sm transition-colors"
           >

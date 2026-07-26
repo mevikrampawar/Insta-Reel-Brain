@@ -25,6 +25,7 @@ export function useScrapeQueue(
   addReel: (data: Partial<Reel>) => Promise<string | undefined>,
   updateReel: (id: string, data: Partial<Reel>) => Promise<void>,
   assignReelsByCategory?: (reels: { id: string; primaryCategory?: string }[]) => Promise<{ processed: number; assigned: number }>,
+  onMasterKeyUsed?: () => Promise<void>,
 ) {
   const [jobs, setJobs] = useState<ScrapeJob[]>([])
   const mounted = useRef(true)
@@ -114,6 +115,7 @@ export function useScrapeQueue(
       }
 
       patch(job.id, { phase: 'complete' })
+      if (onMasterKeyUsed) onMasterKeyUsed().catch(() => {})
       setTimeout(() => { if (mounted.current) remove(job.id) }, 5000)
       return true
     }
