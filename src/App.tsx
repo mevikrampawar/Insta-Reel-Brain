@@ -17,6 +17,7 @@ import { Collections } from './components/Collections'
 import { Settings } from './components/Settings'
 import { DataSources } from './components/DataSources'
 import { DashboardView } from './components/DashboardView'
+import { startTour, isTourCompleted } from './lib/tour'
 
 const VALID_TABS = ['dashboard', 'library', 'ingest', 'chat', 'graph', 'collections', 'datasources', 'settings']
 
@@ -90,6 +91,15 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
   // Mark first visit as complete
   useEffect(() => {
     try { localStorage.setItem('reelbrain-visited', '1') } catch { /* ignore */ }
+  }, [])
+
+  // Auto-start app tour for first-time users
+  useEffect(() => {
+    if (firstRun && !isTourCompleted()) {
+      const timer = setTimeout(() => startTour(), 2000)
+      return () => clearTimeout(timer)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Persist tab to localStorage + URL hash

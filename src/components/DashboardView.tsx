@@ -2,10 +2,14 @@ import { useMemo } from 'react'
 import { motion } from 'motion/react'
 import NumberFlow from '@number-flow/react'
 import { Sparkline } from 'react-tiny-sparkline'
-import { FolderOpen, Heart, MessageCircle, Play, Eye, Brain, Star, Hash, Plus, ArrowRight, Smartphone } from 'lucide-react'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { Brain, FolderOpen, Hash, Plus, ArrowRight, Search, Smartphone, TrendingUp } from 'lucide-react'
 import type { Reel, Collection } from '../types'
 import { computeQualityScore, getQualityLabel, getQualityColor } from '../utils/quality'
-import { formatCount, hashColor } from '../utils/format'
+import { formatCount } from '../utils/format'
 
 interface Props {
   reels: Reel[]
@@ -26,18 +30,32 @@ const item = {
   show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 300, damping: 25 } },
 }
 
+const categoryGradients: Record<string, string> = {
+  'fitness': 'from-orange-500 to-red-600',
+  'education': 'from-blue-500 to-indigo-600',
+  'comedy': 'from-yellow-400 to-orange-500',
+  'cooking': 'from-green-500 to-emerald-600',
+  'tech': 'from-cyan-500 to-blue-600',
+  'fashion': 'from-pink-500 to-purple-600',
+  'music': 'from-purple-500 to-indigo-600',
+  'travel': 'from-teal-400 to-cyan-600',
+  'other': 'from-zinc-500 to-zinc-600',
+}
+
+function getCategoryGradient(category: string): string {
+  return categoryGradients[category] || categoryGradients['other']
+}
+
 export function DashboardView({ reels, collections, onReelClick, onFilterNavigate, needsOnboarding, onGoToIngest }: Props) {
   const completeReels = useMemo(() => reels.filter(r => r.ingestStatus === 'complete'), [reels])
 
   const stats = useMemo(() => {
-    const totalLikes = completeReels.reduce((s, r) => s + (r.likeCount || 0), 0)
-    const totalComments = completeReels.reduce((s, r) => s + (r.commentCount || 0), 0)
-    const totalPlays = completeReels.reduce((s, r) => s + (r.playCount || 0), 0)
-    const totalViews = completeReels.reduce((s, r) => s + (r.viewCount || 0), 0)
     const avgQuality = completeReels.length
       ? Math.round(completeReels.reduce((s, r) => s + computeQualityScore(r).overall, 0) / completeReels.length)
       : 0
-    return { totalLikes, totalComments, totalPlays, totalViews, avgQuality }
+    const allTags = new Set<string>()
+    completeReels.forEach(r => r.suggestedTags?.forEach(t => allTags.add(t)))
+    return { avgQuality, uniqueTags: allTags.size }
   }, [completeReels])
 
   const activitySparkline = useMemo(() => {
@@ -60,43 +78,10 @@ export function DashboardView({ reels, collections, onReelClick, onFilterNavigat
     return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 6)
   }, [completeReels])
 
-  const sentimentBreakdown = useMemo(() => {
-    const map: Record<string, number> = {}
-    completeReels.forEach(r => {
-      const s = r.sentiment || 'neutral'
-      map[s] = (map[s] || 0) + 1
-    })
-    return Object.entries(map).sort((a, b) => b[1] - a[1])
-  }, [completeReels])
-
-  const topCreators = useMemo(() => {
-    const map: Record<string, { count: number; totalLikes: number; handle: string }> = {}
-    completeReels.forEach(r => {
-      if (!r.creatorHandle) return
-      const key = r.creatorHandle.toLowerCase()
-      if (!map[key]) map[key] = { count: 0, totalLikes: 0, handle: r.creatorHandle }
-      map[key].count++
-      map[key].totalLikes += r.likeCount || 0
-    })
-    return Object.values(map).sort((a, b) => b.totalLikes - a.totalLikes).slice(0, 5)
-  }, [completeReels])
-
   const trendingReels = useMemo(() => {
     return [...completeReels]
       .sort((a, b) => (b.likeCount + b.commentCount * 2) - (a.likeCount + a.commentCount * 2))
       .slice(0, 5)
-  }, [completeReels])
-
-  const topEntities = useMemo(() => {
-    const map: Record<string, { name: string; type: string; count: number }> = {}
-    completeReels.forEach(r => {
-      r.entities?.forEach(e => {
-        const key = e.name.toLowerCase()
-        if (!map[key]) map[key] = { name: e.name, type: e.type, count: 0 }
-        map[key].count++
-      })
-    })
-    return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 10)
   }, [completeReels])
 
   const topTags = useMemo(() => {
@@ -114,112 +99,175 @@ export function DashboardView({ reels, collections, onReelClick, onFilterNavigat
   const maxCategoryCount = categoryBreakdown.length > 0 ? Math.max(...categoryBreakdown.map(c => c[1])) : 1
 
   return (
-    <motion.div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto page-enter" variants={container} initial="hidden" animate="show">
-      {/* Header */}
-      <motion.div variants={item}>
-        <h1 className="text-xl font-bold">Dashboard</h1>
-        <p className="text-sm text-zinc-500 mt-1">{completeReels.length} reels analyzed · {collections.length} collections</p>
-      </motion.div>
+    <motion.div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto page-enter" data-tour="dashboard" variants={container} initial="hidden" animate="show">
 
-      {/* Overview cards — knowledge-base focused */}
-      <motion.div className="grid grid-cols-2 md:grid-cols-4 gap-3" variants={item}>
-        <div className="glass-card rounded-xl p-4 hover:scale-[1.02] transition-transform">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
-              <FolderOpen size={16} className="text-indigo-400" />
+      {/* Empty state — onboarding for new users */}
+      {completeReels.length === 0 && needsOnboarding && (
+        <motion.div className="space-y-8 py-8" variants={item} data-tour="dashboard-empty">
+          <div className="text-center space-y-4">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mx-auto shadow-2xl shadow-indigo-500/25">
+              <Brain size={40} />
             </div>
-            {activitySparkline.some(v => v > 0) && (
-              <Sparkline data={activitySparkline} color="#6366f1" width={60} height={20} curved strokeWidth={1.5} />
-            )}
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Welcome to Reel Brain</h1>
+              <p className="text-zinc-400 max-w-md mx-auto">
+                Your AI-powered knowledge base for Instagram Reels. Save reels, and AI will transcribe, summarize, tag, and organize them for you.
+              </p>
+            </div>
           </div>
-          <p className="text-2xl font-bold tabular-nums"><NumberFlow value={completeReels.length} /></p>
-          <p className="text-xs text-zinc-500">Reels</p>
-        </div>
-        <div className="glass-card rounded-xl p-4 hover:scale-[1.02] transition-transform">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto">
+            <div className="glass-card rounded-xl p-5 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                <Smartphone size={20} className="text-blue-400" />
+              </div>
+              <h3 className="font-semibold text-sm">1. Copy a reel link</h3>
+              <p className="text-xs text-zinc-500">From Instagram's share menu</p>
+            </div>
+            <div className="glass-card rounded-xl p-5 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                <Plus size={20} className="text-purple-400" />
+              </div>
+              <h3 className="font-semibold text-sm">2. Paste it here</h3>
+              <p className="text-xs text-zinc-500">AI analyzes it automatically</p>
+            </div>
+            <div className="glass-card rounded-xl p-5 space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                <Brain size={20} className="text-emerald-400" />
+              </div>
+              <h3 className="font-semibold text-sm">3. Build your brain</h3>
+              <p className="text-xs text-zinc-500">Search, chat, and explore</p>
+            </div>
+          </div>
+
+          <div className="text-center">
+            <Button size="lg" onClick={onGoToIngest} className="gap-2">
+              <Plus size={16} /> Add your first reel <ArrowRight size={16} />
+            </Button>
+            <p className="text-[10px] text-zinc-600 mt-3">You have 5 free reels with trial API keys. Add your own keys in Settings for unlimited use.</p>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Quick actions */}
+      {completeReels.length > 0 && (
+        <motion.div className="flex items-center gap-3" variants={item}>
+          <Button onClick={onGoToIngest} className="gap-2">
+            <Plus size={16} /> Add Reel
+          </Button>
+          <Button variant="outline" className="gap-2">
+            <Search size={16} /> Search Library
+          </Button>
+        </motion.div>
+      )}
+
+      {/* Stats row */}
+      {completeReels.length > 0 && (
+        <motion.div className="grid grid-cols-2 md:grid-cols-4 gap-3" variants={item} data-tour="stats">
+          <Card className="glass-card p-4 hover:scale-[1.02] transition-transform">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                <FolderOpen size={16} className="text-indigo-400" />
+              </div>
+              {activitySparkline.some(v => v > 0) && (
+                <Sparkline data={activitySparkline} color="#6366f1" width={60} height={20} curved strokeWidth={1.5} />
+              )}
+            </div>
+            <p className="text-2xl font-bold tabular-nums"><NumberFlow value={completeReels.length} /></p>
+            <p className="text-xs text-zinc-500">Reels</p>
+          </Card>
+          <Card className="glass-card p-4 hover:scale-[1.02] transition-transform">
+            <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center mb-2">
               <Brain size={16} className="text-purple-400" />
             </div>
-          </div>
-          <p className="text-2xl font-bold tabular-nums"><NumberFlow value={collections.length} /></p>
-          <p className="text-xs text-zinc-500">Collections</p>
-        </div>
-        <div className="glass-card rounded-xl p-4 hover:scale-[1.02] transition-transform">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
-              <Star size={16} className="text-amber-400" />
+            <p className="text-2xl font-bold tabular-nums"><NumberFlow value={collections.length} /></p>
+            <p className="text-xs text-zinc-500">Collections</p>
+          </Card>
+          <Card className="glass-card p-4 hover:scale-[1.02] transition-transform">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center mb-2">
+              <TrendingUp size={16} className="text-amber-400" />
             </div>
-          </div>
-          <p className="text-2xl font-bold tabular-nums"><NumberFlow value={stats.avgQuality} /></p>
-          <p className="text-xs text-zinc-500">Avg Quality</p>
-        </div>
-        <div className="glass-card rounded-xl p-4 hover:scale-[1.02] transition-transform">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+            <p className="text-2xl font-bold tabular-nums"><NumberFlow value={stats.avgQuality} /></p>
+            <p className="text-xs text-zinc-500">Avg Quality</p>
+          </Card>
+          <Card className="glass-card p-4 hover:scale-[1.02] transition-transform">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-2">
               <Hash size={16} className="text-emerald-400" />
             </div>
-          </div>
-          <p className="text-2xl font-bold tabular-nums"><NumberFlow value={topTags.length} /></p>
-          <p className="text-xs text-zinc-500">Unique Tags</p>
-        </div>
-      </motion.div>
+            <p className="text-2xl font-bold tabular-nums"><NumberFlow value={stats.uniqueTags} /></p>
+            <p className="text-xs text-zinc-500">Unique Tags</p>
+          </Card>
+        </motion.div>
+      )}
 
-      {/* Trending reels — top priority for knowledge base */}
+      {/* Trending section */}
       {trendingReels.length > 0 && (
-        <motion.div className="glass-card rounded-xl p-4" variants={item}>
+        <motion.div variants={item}>
           <h2 className="text-sm font-semibold mb-3">Trending</h2>
-          <div className="space-y-2">
+          <div className="flex gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-5 md:overflow-visible scrollbar-hide">
             {trendingReels.map((r, i) => (
               <motion.button
                 key={r.id}
                 onClick={() => onReelClick(r.id)}
-                className="w-full flex items-center gap-3 glass rounded-lg px-3 py-2.5 hover:bg-white/[0.04] transition-colors text-left"
-                whileHover={{ x: 4 }}
+                className="glass-card rounded-xl overflow-hidden min-w-[200px] md:min-w-0 text-left hover:scale-[1.02] transition-transform flex-shrink-0"
+                whileHover={{ y: -2 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 25 }}
               >
-                <span className="text-lg font-bold text-zinc-700 w-6 text-center shrink-0">{i + 1}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-zinc-300 truncate">{r.title || 'Untitled'}</p>
-                  <p className="text-[10px] text-zinc-500">
-                    @{r.creatorHandle || 'unknown'} · {formatCount(r.likeCount)} likes · {formatCount(r.commentCount)} comments
-                  </p>
+                <div className={cn('h-20 bg-gradient-to-br', getCategoryGradient(r.contentCategory), 'flex items-end p-2')}>
+                  <span className="text-lg font-bold text-white/80">{i + 1}</span>
                 </div>
-                <span className={`text-[11px] shrink-0 ${getQualityColor(computeQualityScore(r).overall)}`}>
-                  {getQualityLabel(computeQualityScore(r).overall)}
-                </span>
+                <div className="p-3 space-y-1">
+                  <p className="text-xs font-medium text-zinc-200 truncate">{r.title || 'Untitled'}</p>
+                  <p className="text-[10px] text-zinc-500 truncate">@{r.creatorHandle || 'unknown'}</p>
+                  <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                    <span>{formatCount(r.likeCount)} likes</span>
+                    <span>·</span>
+                    <span>{formatCount(r.commentCount)} comments</span>
+                  </div>
+                  <span className={cn('text-[11px]', getQualityColor(computeQualityScore(r).overall))}>
+                    {getQualityLabel(computeQualityScore(r).overall)}
+                  </span>
+                </div>
               </motion.button>
             ))}
           </div>
         </motion.div>
       )}
 
-      {/* Top Tags — interactive, click to filter library */}
+      {/* Top Tags — horizontal scrollable pills */}
       {topTags.length > 0 && (
-        <motion.div className="glass-card rounded-xl p-4" variants={item}>
+        <motion.div variants={item}>
           <h2 className="text-sm font-semibold mb-3">Top Tags</h2>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
             {topTags.map(([tag, count]) => (
-              <motion.button key={tag}
-                onClick={() => onReelClick(completeReels.find(r => r.suggestedTags?.includes(tag))?.id || '')}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-500/10 text-indigo-400 rounded-lg text-[11px] hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors cursor-pointer"
+              <motion.button
+                key={tag}
+                onClick={() => {
+                  const reel = completeReels.find(r => r.suggestedTags?.includes(tag))
+                  if (reel) onFilterNavigate({ categories: [reel.contentCategory] }, reel.id)
+                }}
+                className="flex-shrink-0"
                 whileHover={{ scale: 1.05 }}
               >
-                <Hash size={9} className="shrink-0" />
-                {tag}
-                <span className="text-[9px] text-indigo-500">x{count}</span>
+                <Badge variant="secondary" className="gap-1 cursor-pointer hover:bg-white/10 transition-colors">
+                  <Hash size={10} />
+                  {tag}
+                  <span className="text-zinc-500 ml-0.5">x{count}</span>
+                </Badge>
               </motion.button>
             ))}
           </div>
         </motion.div>
       )}
 
-      {/* Content Categories — interactive, click to filter library */}
+      {/* Category breakdown */}
       {categoryBreakdown.length > 0 && (
-        <motion.div className="glass-card rounded-xl p-4" variants={item}>
+        <motion.div variants={item}>
           <h2 className="text-sm font-semibold mb-3">Content Categories</h2>
           <div className="space-y-2">
             {categoryBreakdown.map(([cat, count]) => (
-              <button key={cat}
+              <button
+                key={cat}
                 onClick={() => onFilterNavigate({ categories: [cat] })}
                 className="w-full flex items-center gap-2 group hover:bg-white/[0.02] rounded-lg px-1 py-0.5 -mx-1 transition-colors"
               >
@@ -239,30 +287,11 @@ export function DashboardView({ reels, collections, onReelClick, onFilterNavigat
         </motion.div>
       )}
 
-      {/* Top Entities */}
-      {topEntities.length > 0 && (
-        <motion.div className="glass-card rounded-xl p-4" variants={item}>
-          <h2 className="text-sm font-semibold mb-3">Top Entities</h2>
-          <div className="flex flex-wrap gap-1.5">
-            {topEntities.map(e => (
-              <motion.span key={e.name}
-                className="inline-flex items-center gap-1 px-2 py-1 glass rounded-lg text-[11px] text-zinc-300"
-                whileHover={{ scale: 1.05 }}
-              >
-                {e.name}
-                <span className="text-[9px] text-zinc-600 capitalize">{e.type}</span>
-                <span className="text-[9px] text-zinc-500">x{e.count}</span>
-              </motion.span>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Recently Added — interactive */}
+      {/* Recently added */}
       {recentReels.length > 0 && (
-        <motion.div className="glass-card rounded-xl p-4" variants={item}>
+        <motion.div variants={item}>
           <h2 className="text-sm font-semibold mb-3">Recently Added</h2>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {recentReels.map(r => (
               <motion.button
                 key={r.id}
@@ -271,150 +300,18 @@ export function DashboardView({ reels, collections, onReelClick, onFilterNavigat
                 whileHover={{ x: 4 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 25 }}
               >
+                <span className="text-[10px] text-zinc-600 w-16 shrink-0 tabular-nums">
+                  {new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium text-zinc-300 truncate">{r.title || 'Untitled'}</p>
-                  <p className="text-[10px] text-zinc-500">
-                    @{r.creatorHandle || 'unknown'} · {new Date(r.createdAt).toLocaleDateString()}
-                  </p>
                 </div>
                 {r.contentCategory && r.contentCategory !== 'other' && (
-                  <span className="text-[10px] text-zinc-500 bg-zinc-800/50 px-1.5 py-0.5 rounded capitalize shrink-0">{r.contentCategory}</span>
+                  <Badge variant="secondary" className="text-[10px] capitalize shrink-0">{r.contentCategory}</Badge>
                 )}
               </motion.button>
             ))}
           </div>
-        </motion.div>
-      )}
-
-      {/* Top Creators — interactive, click to filter library */}
-      {topCreators.length > 0 && (
-        <motion.div className="glass-card rounded-xl p-4" variants={item}>
-          <h2 className="text-sm font-semibold mb-3">Top Creators</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-            {topCreators.map(c => (
-              <button key={c.handle}
-                onClick={() => onFilterNavigate({ creator: c.handle })}
-                className="flex items-center gap-3 glass rounded-lg px-3 py-2.5 hover:bg-white/[0.04] transition-colors text-left"
-              >
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-                  style={{ background: hashColor(c.handle) }}
-                >
-                  {c.handle[0]?.toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-zinc-300 truncate">@{c.handle}</p>
-                  <p className="text-[10px] text-zinc-500">{c.count} reels · {formatCount(c.totalLikes)} likes</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Sentiment */}
-      {sentimentBreakdown.length > 0 && (
-        <motion.div className="glass-card rounded-xl p-4" variants={item}>
-          <h2 className="text-sm font-semibold mb-3">Sentiment</h2>
-          <div className="space-y-2">
-            {(() => {
-              const maxSent = Math.max(...sentimentBreakdown.map(s => s[1]))
-              return sentimentBreakdown.map(([sent, count]) => {
-                const color = sent === 'positive' ? 'from-emerald-500/60 to-emerald-400/40'
-                  : sent === 'negative' ? 'from-red-500/60 to-red-400/40'
-                  : 'from-zinc-500/60 to-zinc-400/40'
-                return (
-                  <div key={sent} className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-400 w-20 truncate capitalize">{sent}</span>
-                    <div className="flex-1 h-5 bg-zinc-800/50 rounded overflow-hidden">
-                      <motion.div
-                        className={`h-full bg-gradient-to-r ${color} rounded`}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(count / maxSent) * 100}%` }}
-                        transition={{ duration: 0.6, ease: 'easeOut' }}
-                      />
-                    </div>
-                    <span className="text-[11px] text-zinc-500 w-6 text-right tabular-nums">{count}</span>
-                  </div>
-                )
-              })
-            })()}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Engagement summary — secondary, at bottom */}
-      <motion.div className="glass-card rounded-xl p-4" variants={item}>
-        <h2 className="text-sm font-semibold mb-3 text-zinc-400">Engagement Overview</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { icon: Heart, color: 'text-emerald-400', value: stats.totalLikes, label: 'Likes' },
-            { icon: MessageCircle, color: 'text-blue-400', value: stats.totalComments, label: 'Comments' },
-            { icon: Play, color: 'text-pink-400', value: stats.totalPlays, label: 'Plays' },
-            { icon: Eye, color: 'text-cyan-400', value: stats.totalViews, label: 'Views' },
-          ].map(({ icon: Icon, color, value, label }) => (
-            <div key={label} className="glass rounded-xl p-3 flex items-center gap-3 hover:bg-white/[0.04] transition-colors">
-              <Icon size={14} className={`${color} shrink-0`} />
-              <div>
-                <p className="text-sm font-medium tabular-nums"><NumberFlow value={value} /></p>
-                <p className="text-[10px] text-zinc-500">{label}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* Empty state — onboarding for new users */}
-      {completeReels.length === 0 && (
-        <motion.div className="glass-card rounded-xl p-6 md:p-8 text-center" variants={item}>
-          {needsOnboarding ? (
-            <div className="space-y-6">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/20">
-                <Brain size={28} />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold mb-2">Welcome to Reel Brain</h3>
-                <p className="text-sm text-zinc-400 max-w-md mx-auto">
-                  Your AI-powered knowledge base for Instagram Reels. Save reels, and AI will transcribe, summarize, tag, and organize them for you.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-lg mx-auto text-left">
-                <div className="p-3 bg-white/[0.03] border border-white/5 rounded-xl">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center mb-2">
-                    <Smartphone size={14} className="text-blue-400" />
-                  </div>
-                  <p className="text-xs font-medium">1. Copy a reel link</p>
-                  <p className="text-[10px] text-zinc-500 mt-0.5">From Instagram's share menu</p>
-                </div>
-                <div className="p-3 bg-white/[0.03] border border-white/5 rounded-xl">
-                  <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center mb-2">
-                    <Plus size={14} className="text-purple-400" />
-                  </div>
-                  <p className="text-xs font-medium">2. Paste it here</p>
-                  <p className="text-[10px] text-zinc-500 mt-0.5">AI analyzes it automatically</p>
-                </div>
-                <div className="p-3 bg-white/[0.03] border border-white/5 rounded-xl">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-2">
-                    <Brain size={14} className="text-emerald-400" />
-                  </div>
-                  <p className="text-xs font-medium">3. Build your brain</p>
-                  <p className="text-[10px] text-zinc-500 mt-0.5">Search, chat, and explore</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-center gap-3">
-                <button onClick={onGoToIngest} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors">
-                  <Plus size={14} /> Add your first reel <ArrowRight size={14} />
-                </button>
-              </div>
-              <p className="text-[10px] text-zinc-600">You have 5 free reels with trial API keys. Add your own keys in Settings for unlimited use.</p>
-            </div>
-          ) : (
-            <>
-              <Brain size={32} className="text-zinc-700 mx-auto mb-3" />
-              <p className="text-sm text-zinc-400">No reels yet</p>
-              <p className="text-xs text-zinc-600 mt-1">Add your first reel to see your dashboard</p>
-            </>
-          )}
         </motion.div>
       )}
     </motion.div>
