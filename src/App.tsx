@@ -46,26 +46,39 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
 
   // Handle deep link: ?url=<encoded_url> from iOS Shortcut or PWA share target
   // Also handles #ingest?url=<encoded_url> from service worker redirect
+  // Also checks sessionStorage for deep links preserved through auth
   // Wait for API keys to load before processing to avoid empty-token auth errors
   useEffect(() => {
     if (apiCtx.loading) return
 
+    // 1. Check URL query params
     const params = new URLSearchParams(window.location.search)
     let deepUrl = params.get('url')
 
+    // 2. Check hash fragment
     if (!deepUrl && window.location.hash.includes('url=')) {
       const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '')
       deepUrl = hashParams.get('url')
     }
 
+    // 3. Check sessionStorage (preserved through auth)
+    if (!deepUrl) {
+      try {
+        deepUrl = sessionStorage.getItem('reelbrain-pending-deep-url')
+        if (deepUrl) sessionStorage.removeItem('reelbrain-pending-deep-url')
+      } catch { /* ignore */ }
+    }
+
     if (deepUrl) {
+      // Validate URL looks like an Instagram reel before processing
+      if (!/^https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p)\/[\w-]+/.test(deepUrl)) return
       window.history.replaceState(null, '', `#ingest`)
       setNav({ tab: 'ingest' })
       try { localStorage.setItem('reelbrain-tab', 'ingest') } catch { /* ignore */ }
       // Only add if not already in queue
       const urlExists = jobs.some(j => j.url === deepUrl)
       if (!urlExists) {
-        const timer = setTimeout(() => addJob(deepUrl), 100)
+        const timer = setTimeout(() => addJob(deepUrl, 'ios-shortcut'), 100)
         return () => clearTimeout(timer)
       }
     }
@@ -309,6 +322,15 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
 
 export default function App() {
   const { user, loading, signInWithGoogle, logout } = useAuth()
+
+  // Preserve deep link URL through auth — save it before login screen replaces the page
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const deepUrl = params.get('url')
+    if (deepUrl) {
+      try { sessionStorage.setItem('reelbrain-pending-deep-url', deepUrl) } catch { /* ignore */ }
+    }
+  }, [])
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">

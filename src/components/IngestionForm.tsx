@@ -242,7 +242,11 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
               <div className="flex items-start gap-2.5">
                 <ExternalLink size={14} className="text-amber-400 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-xs text-zinc-300"><span className="font-medium">iOS Shortcut:</span> Set up the "Add to Reel Brain" shortcut to share directly from Instagram</p>
+                  <p className="text-xs text-zinc-300"><span className="font-medium">iOS Shortcut:</span> Tap to install, then share reels directly from Instagram</p>
+                  <a href="/Insta-Reel-Brain/Add-to-Reel-Brain.shortcut" download
+                    className="inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg text-[11px] font-medium text-amber-300 transition-colors">
+                    <Smartphone size={10} /> Install Shortcut
+                  </a>
                 </div>
               </div>
             </div>

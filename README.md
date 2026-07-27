@@ -64,24 +64,15 @@ API keys are stored per-user in Firestore. No `.env` files needed.
 
 You don't have to manually paste URLs. Set up automatic ingestion from your phone.
 
-### iOS Shortcut (iPhone)
+### iOS Shortcut (iPhone) — Recommended
 
 The best way to add reels from your iPhone. Set up once, use forever.
 
-1. Open the **Shortcuts** app on your iPhone (pre-installed)
-2. Tap **+** in the top right to create a new Shortcut
-3. Tap **Add Action** and search for **"Receive input"** → select **Receive input from Share Sheet**
-4. Tap **Add Action** again and search for **"URL"** → tap it
-5. In the URL field, enter:
-   ```
-   https://mevikrampawar.github.io/Insta-Reel-Brain/?url=[Shortcut Input]
-   ```
-   **Important:** Use `[Shortcut Input]` (NOT [clipboard]). Tap the variable bar above the keyboard → select "Shortcut Input"
-6. Tap **Add Action** and search for **"Open URL"** → tap it
-7. Tap the shortcut name at the top → rename it **"Add to Reel Brain"**
-8. Tap **Done** to save
+**One-tap install:** Open the app → tap **Add** → expand **"Quick ways to add reels"** → tap **"Install Shortcut"**. The shortcut installs automatically.
 
-**To use it:** From Instagram → tap Share → scroll down → tap "Add to Reel Brain" → the reel auto-opens in your app and starts processing.
+**Manual setup:** If the direct install doesn't work, go to Add → Quick ways → iOS Shortcut → follow the instructions.
+
+**To use it:** From Instagram → tap Share → scroll down → tap "Add to Reel Brain" → the reel auto-opens in your app and starts processing. Works from any Instagram screen — feed, reels, stories, or profiles.
 
 ### Android / Desktop (PWA Share Target)
 
@@ -98,7 +89,7 @@ The app supports deep links via URL parameter:
 https://mevikrampawar.github.io/Insta-Reel-Brain/?url=https://www.instagram.com/reel/ABC123/
 ```
 
-When opened, the app auto-navigates to the ingest tab and adds the URL to the queue.
+When opened, the app auto-navigates to the ingest tab and adds the URL to the queue. If you're not logged in, the URL is saved and processed after you sign in.
 
 ### Clipboard Detection (iOS & Desktop)
 

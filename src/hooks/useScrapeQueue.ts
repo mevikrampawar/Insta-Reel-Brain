@@ -14,6 +14,7 @@ export interface ScrapeJob {
   sources?: DataSourceRecord[]
   runId?: string
   datasetId?: string
+  reelSource?: 'manual' | 'upload' | 'telegram' | 'ios-shortcut'
 }
 
 const POLL_MS = 3000
@@ -54,6 +55,7 @@ export function useScrapeQueue(
 
       const reelId = await addReel({
         url: job.url,
+        source: job.reelSource || 'manual',
         title: result.title || 'Untitled Reel',
         caption: result.caption,
         hashtags: result.hashtags,
@@ -156,10 +158,10 @@ export function useScrapeQueue(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs])
 
-  const addJob = useCallback(async (url: string) => {
+  const addJob = useCallback(async (url: string, source?: 'manual' | 'upload' | 'telegram' | 'ios-shortcut') => {
     const id = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
-    setJobs(prev => [...prev, { id, url, phase: 'queued' }])
+    setJobs(prev => [...prev, { id, url, phase: 'queued', reelSource: source }])
 
     try {
       const { runId } = await startApifyRun(apifyApiKey, url)
