@@ -1,4 +1,6 @@
-// Minimal service worker for PWA + share target support
+// Service worker for PWA support and offline caching
+
+const BASE_PATH = '/Insta-Reel-Brain'
 
 self.addEventListener('install', () => {
   self.skipWaiting()
@@ -8,27 +10,13 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(clients.claim())
 })
 
-// Handle share target: redirect URL param to the app
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
-
-  // Only handle share target GET requests with a url param
-  if (event.request.method === 'GET' && url.searchParams.has('url')) {
-    event.respondWith(
-      new Response(null, {
-        status: 303,
-        headers: {
-          'Location': `/#ingest?url=${encodeURIComponent(url.searchParams.get('url'))}`,
-        },
-      })
-    )
-    return
-  }
 
   // Network-first strategy for navigation
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match('/index.html'))
+      fetch(event.request).catch(() => caches.match(`${BASE_PATH}/index.html`))
     )
     return
   }
