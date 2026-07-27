@@ -4,9 +4,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Settings as SettingsIcon, Save, Check, ExternalLink, Trash2, Bot, Zap, Loader2, XCircle, Sparkles, Eye, EyeOff } from 'lucide-react'
-import { db } from '../services/firebase'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Settings as SettingsIcon, Save, Check, ExternalLink, Trash2, Bot, Zap, Loader2, XCircle, Sparkles, Eye, EyeOff, AlertTriangle } from 'lucide-react'
+import { db, auth } from '../services/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { GoogleAuthProvider, reauthenticateWithPopup } from 'firebase/auth'
+import { clearAllUserData } from '../services/userData'
+import { toast } from 'sonner'
 
 interface Props { userId: string }
 
@@ -27,6 +31,10 @@ export function Settings({ userId }: Props) {
   const [loading, setLoading] = useState(true)
   const [showGroq, setShowGroq] = useState(false)
   const [showApify, setShowApify] = useState(false)
+  const [dangerOpen, setDangerOpen] = useState(false)
+  const [dangerStep, setDangerStep] = useState<'confirm' | 'reauth' | 'type-delete' | 'deleting' | 'done'>('confirm')
+  const [deleteInput, setDeleteInput] = useState('')
+  const [deleteError, setDeleteError] = useState('')
   const mounted = useRef(true)
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
@@ -103,6 +111,63 @@ export function Settings({ userId }: Props) {
     const t = setTimeout(() => { if (mounted.current) setApify(s => ({ ...s, testResult: null })) }, 4000)
     return () => clearTimeout(t)
   }, [apify.local])
+
+  // --- Danger Zone: multi-step deletion flow ---
+  const openDangerZone = useCallback(() => {
+    setDangerOpen(true)
+    setDangerStep('confirm')
+    setDeleteInput('')
+    setDeleteError('')
+  }, [])
+
+  const handleReauth = useCallback(async () => {
+    setDangerStep('reauth')
+    setDeleteError('')
+    try {
+      const provider = new GoogleAuthProvider()
+      if (!auth.currentUser) throw new Error('Not signed in')
+      await reauthenticateWithPopup(auth.currentUser, provider)
+      // Re-auth successful — move to type-delete step
+      setDangerStep('type-delete')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Re-authentication failed'
+      if (msg.includes('popup-closed-by-user') || msg.includes('cancelled')) {
+        setDeleteError('You closed the sign-in popup. Please try again.')
+        setDangerStep('confirm')
+      } else {
+        setDeleteError(`Re-authentication failed: ${msg}`)
+        setDangerStep('confirm')
+      }
+    }
+  }, [])
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (deleteInput.trim() !== 'DELETE') {
+      setDeleteError('Type DELETE to confirm')
+      return
+    }
+    setDangerStep('deleting')
+    setDeleteError('')
+    try {
+      const result = await clearAllUserData(userId)
+      setDangerStep('done')
+      toast.success(`All data deleted (${result.deleted} items removed)`)
+      // Reset API key state since settings were cleared
+      setGroq(empty)
+      setApify(empty)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Deletion failed'
+      setDeleteError(`Deletion failed: ${msg}`)
+      setDangerStep('type-delete')
+    }
+  }, [userId, deleteInput])
+
+  const closeDangerZone = useCallback(() => {
+    setDangerOpen(false)
+    setDangerStep('confirm')
+    setDeleteInput('')
+    setDeleteError('')
+  }, [])
 
   if (loading) return <div className="p-8 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-indigo-500" /></div>
 
@@ -264,13 +329,147 @@ export function Settings({ userId }: Props) {
         <CardContent className="p-4 flex items-center justify-between">
           <div>
             <h4 className="text-sm font-medium">Danger Zone</h4>
-            <p className="text-xs text-zinc-500">Clear all data from your account</p>
+            <p className="text-xs text-zinc-500">Permanently delete all your reels, collections, notes, and settings</p>
           </div>
-          <Button variant="destructive" size="sm" className="gap-1.5">
+          <Button variant="destructive" size="sm" className="gap-1.5" onClick={openDangerZone}>
             <Trash2 size={12} /> Clear All Data
           </Button>
         </CardContent>
       </Card>
+
+      {/* Danger Zone Dialog — multi-step confirmation */}
+      <Dialog open={dangerOpen} onOpenChange={open => { if (!open) closeDangerZone() }}>
+        <DialogContent className="sm:max-w-md">
+          {/* Step 1: Initial confirmation */}
+          {dangerStep === 'confirm' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle size={18} />
+                  Delete All Data?
+                </DialogTitle>
+                <DialogDescription>
+                  This will permanently delete <strong>everything</strong> in your account:
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2 py-2">
+                {[
+                  { label: 'All reels', count: 'scraped data, transcripts, analysis' },
+                  { label: 'All collections', count: 'custom and auto-assigned' },
+                  { label: 'All notes', count: 'on every reel' },
+                  { label: 'API keys', count: 'your saved Groq & Apify keys' },
+                ].map(item => (
+                  <div key={item.label} className="flex items-start gap-2 text-sm">
+                    <Trash2 size={14} className="text-destructive mt-0.5 shrink-0" />
+                    <div>
+                      <span className="font-medium">{item.label}</span>
+                      <span className="text-muted-foreground ml-1">— {item.count}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {deleteError && <p className="text-xs text-destructive">{deleteError}</p>}
+              <DialogFooter>
+                <Button variant="outline" onClick={closeDangerZone}>Cancel</Button>
+                <Button variant="destructive" onClick={handleReauth} className="gap-1.5">
+                  Continue
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {/* Step 2: Re-authenticate with Google */}
+          {dangerStep === 'reauth' && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Verify Your Identity</DialogTitle>
+                <DialogDescription>
+                  For security, please sign in with Google again to confirm this deletion.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col items-center gap-4 py-6">
+                <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <Loader2 size={24} className="text-destructive animate-spin" />
+                </div>
+                <p className="text-sm text-muted-foreground">Waiting for Google sign-in...</p>
+              </div>
+              {deleteError && (
+                <>
+                  <p className="text-xs text-destructive text-center">{deleteError}</p>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={closeDangerZone}>Cancel</Button>
+                    <Button variant="destructive" onClick={handleReauth}>Try Again</Button>
+                  </DialogFooter>
+                </>
+              )}
+            </>
+          )}
+
+          {/* Step 3: Type DELETE to confirm */}
+          {dangerStep === 'type-delete' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle size={18} />
+                  Final Confirmation
+                </DialogTitle>
+                <DialogDescription>
+                  Type <strong>DELETE</strong> below to permanently erase all your data. This cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                <Input
+                  value={deleteInput}
+                  onChange={e => { setDeleteInput(e.target.value); setDeleteError('') }}
+                  placeholder='Type "DELETE" to confirm'
+                  className="font-mono"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter' && deleteInput.trim() === 'DELETE') handleDeleteConfirm() }}
+                />
+                {deleteError && <p className="text-xs text-destructive">{deleteError}</p>}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeDangerZone}>Cancel</Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteConfirm}
+                  disabled={deleteInput.trim() !== 'DELETE'}
+                  className="gap-1.5"
+                >
+                  <Trash2 size={12} /> Permanently Delete Everything
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {/* Step 4: Deleting in progress */}
+          {dangerStep === 'deleting' && (
+            <div className="flex flex-col items-center gap-4 py-8">
+              <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                <Loader2 size={24} className="text-destructive animate-spin" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium">Deleting all data...</p>
+                <p className="text-xs text-muted-foreground mt-1">This may take a moment</p>
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Done */}
+          {dangerStep === 'done' && (
+            <div className="flex flex-col items-center gap-4 py-8">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                <Check size={24} className="text-emerald-500" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium">All data deleted</p>
+                <p className="text-xs text-muted-foreground mt-1">Your account is now clean. You can start fresh.</p>
+              </div>
+              <Button onClick={closeDangerZone}>Done</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
