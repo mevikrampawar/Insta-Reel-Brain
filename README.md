@@ -68,9 +68,14 @@ You don't have to manually paste URLs. Set up automatic ingestion from your phon
 
 The best way to add reels from your iPhone. Set up once, use forever.
 
-**One-tap install:** Open the app → tap **Add** → expand **"Quick ways to add reels"** → tap **"Install Shortcut"**. The shortcut installs automatically.
+**Quick setup:** Open the app → tap **Add** → expand **"Quick ways to add reels"** → follow the 5-step guide. The URL template is copy-paste ready.
 
-**Manual setup:** If the direct install doesn't work, go to Add → Quick ways → iOS Shortcut → follow the instructions.
+**Steps:**
+1. Open the **Shortcuts** app on your iPhone (pre-installed)
+2. Tap **+** → **Add Action** → search "Receive input" → select **Receive Input from Share Sheet**
+3. Tap **Add Action** → search "Open URLs" → tap it
+4. Tap **URL** → delete the default → paste: `https://mevikrampawar.github.io/Insta-Reel-Brain/?url=[Shortcut Input]`
+5. Tap the shortcut name → rename it **"Add to Reel Brain"** → Done
 
 **To use it:** From Instagram → tap Share → scroll down → tap "Add to Reel Brain" → the reel auto-opens in your app and starts processing. Works from any Instagram screen — feed, reels, stories, or profiles.
 
