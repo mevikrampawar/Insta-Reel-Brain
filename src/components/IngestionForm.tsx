@@ -14,6 +14,7 @@ interface Props {
   addJob: (url: string) => void
   removeJob: (id: string) => void
   apiKey: string
+  apiKeyLoading: boolean
   apifyApiKey: string
   onSwitchToLibrary: () => void
   clipboardUrl?: string | null
@@ -52,7 +53,7 @@ function shortUrl(url: string) {
   } catch { return url.slice(0, 40) }
 }
 
-export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, onSwitchToLibrary, clipboardUrl, onDismissClipboard, masterUsageCount = 0, masterUsageLimit = 5, needsMasterApify = false, hasOwnApifyKey = false, canUseMasterKey = true, onGoToSettings, existingReelUrls = [] }: Props) {
+export function IngestionForm({ jobs, addJob, removeJob, apiKey, apiKeyLoading, apifyApiKey, onSwitchToLibrary, clipboardUrl, onDismissClipboard, masterUsageCount = 0, masterUsageLimit = 5, needsMasterApify = false, hasOwnApifyKey = false, canUseMasterKey = true, onGoToSettings, existingReelUrls = [] }: Props) {
   const [url, setUrl] = useState('')
   const [duplicateMsg, setDuplicateMsg] = useState<string | null>(null)
   const [tipsOpen, setTipsOpen] = useState(false)
@@ -96,6 +97,21 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
     setUrl('')
     setDuplicateMsg(null)
   }, [url, addJob, jobs, existingReelUrls])
+
+  if (apiKeyLoading) {
+    return (
+      <div className="max-w-2xl mx-auto p-4 md:p-8 space-y-6">
+        <div className="space-y-2 animate-pulse">
+          <div className="h-8 w-48 bg-zinc-800 rounded-lg" />
+          <div className="h-4 w-32 bg-zinc-800/60 rounded" />
+        </div>
+        <div className="flex gap-2">
+          <div className="flex-1 h-14 bg-zinc-800 rounded-xl animate-pulse" />
+          <div className="h-14 w-14 bg-zinc-800 rounded-xl animate-pulse" />
+        </div>
+      </div>
+    )
+  }
 
   if (!apiKey) {
     return (

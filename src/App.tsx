@@ -7,6 +7,8 @@ import { ApiKeyProvider, useApiKey } from './hooks/ApiKeyContext'
 import { processReel } from './services/ingestion'
 import { startApifyRun, pollApifyRun, fetchApifyDataset } from './services/apify'
 import { classifyReelHierarchy } from './services/groq'
+import { db } from './services/firebase'
+import { collection, onSnapshot, deleteDoc, doc } from 'firebase/firestore'
 import { Login } from './components/Login'
 import { Layout, type NavState } from './components/Layout'
 import { Library } from './components/Library'
@@ -82,6 +84,27 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
         return () => clearTimeout(timer)
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiCtx.loading])
+
+  // Listen for pending URLs written by Cloudflare Worker (iOS Shortcut background relay)
+  useEffect(() => {
+    if (apiCtx.loading) return
+    const pendingRef = collection(db, 'users', user.uid, 'pendingUrls')
+    const unsub = onSnapshot(pendingRef, (snap) => {
+      for (const change of snap.docChanges()) {
+        if (change.type === 'added') {
+          const data = change.doc.data()
+          const url = data.url as string
+          if (url && !jobs.some(j => j.url === url)) {
+            addJob(url, (data.source as 'ios-shortcut') || 'ios-shortcut')
+          }
+          // Clean up the pending URL document
+          deleteDoc(doc(db, 'users', user.uid, 'pendingUrls', change.doc.id)).catch(() => {})
+        }
+      }
+    }, () => { /* listener error — non-fatal */ })
+    return unsub
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiCtx.loading])
 
@@ -282,6 +305,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           addJob={addJob}
           removeJob={removeJob}
           apiKey={apiCtx.apiKey}
+          apiKeyLoading={apiCtx.loading}
           apifyApiKey={apiCtx.apifyApiKey}
           onSwitchToLibrary={() => handleNavChange({ tab: 'library' })}
           clipboardUrl={clipboardUrl}
