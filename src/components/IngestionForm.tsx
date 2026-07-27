@@ -76,6 +76,11 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apifyApiKey, on
     if (!trimmed) return
     const normalized = normalizeUrl(trimmed)
 
+    if (!/^https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p)\/[\w-]+/.test(trimmed)) {
+      setDuplicateMsg('Please enter a valid Instagram Reel URL')
+      return
+    }
+
     if (existingReelUrls.some(u => normalizeUrl(u) === normalized)) {
       setDuplicateMsg('This reel is already in your library')
       return

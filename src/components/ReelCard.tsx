@@ -27,6 +27,8 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
   const [expanded, setExpanded] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [showCollections, setShowCollections] = useState(false)
+  const [summaryExpanded, setSummaryExpanded] = useState(false)
+  const [expandedComments, setExpandedComments] = useState<Set<number>>(new Set())
   const { notes, addNote, updateNote, deleteNote } = useNotes(userId, reel.id)
 
   // Failed state
@@ -82,7 +84,7 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
             </div>
             {/* Right: link + actions */}
             <div className="flex items-center gap-1 ml-auto shrink-0">
-              {reel.url && reel.url !== 'manual-entry' && (
+              {reel.url && reel.url !== 'manual-entry' && reel.url.startsWith('https://') && (
                 <a href={reel.url} target="_blank" rel="noopener noreferrer"
                   className="p-1.5 text-zinc-600 hover:text-indigo-400 transition-colors rounded-lg"
                   title="Open original">
@@ -129,7 +131,17 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
 
         {/* Row 3: Summary */}
         {reel.summary && (
-          <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3 mb-3">{reel.summary}</p>
+          <div className="mb-3">
+            <p className={`text-xs text-zinc-400 leading-relaxed ${summaryExpanded ? '' : 'line-clamp-3'}`}>{reel.summary}</p>
+            {reel.summary.length > 120 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setSummaryExpanded(!summaryExpanded) }}
+                className="text-[10px] text-indigo-400 hover:text-indigo-300 mt-1 transition-colors"
+              >
+                {summaryExpanded ? 'Show less' : 'Show more'}
+              </button>
+            )}
+          </div>
         )}
 
         {/* Row 4: Tags + Concepts — compact single line */}
@@ -241,7 +253,7 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
       {/* === NOTES === */}
       {showNotes && (
         <div className="border-t border-zinc-800 px-4 py-3">
-          <Notes notes={notes} reelTitle={reel.title} onAdd={addNote} onUpdate={updateNote} onDelete={deleteNote} />
+          <Notes notes={notes} reelTitle={reel.title} onAdd={(data) => addNote({ ...data, reelId: reel.id })} onUpdate={updateNote} onDelete={deleteNote} />
         </div>
       )}
 
@@ -372,12 +384,31 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
             <div>
               <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 font-medium">Top Comments</p>
               <div className="space-y-2">
-                {reel.topComments.map((c, i) => (
-                  <div key={i} className="bg-zinc-800/40 rounded-lg px-3 py-2">
-                    <p className="text-xs text-zinc-300 leading-relaxed">{c.text}</p>
-                    <p className="text-[10px] text-zinc-600 mt-1">@{c.author} · {formatCount(c.likes)} likes</p>
-                  </div>
-                ))}
+                {reel.topComments.map((c, i) => {
+                  const isExpanded = expandedComments.has(i)
+                  const needsTruncation = c.text.length > 120
+                  return (
+                    <div key={i} className="bg-zinc-800/40 rounded-lg px-3 py-2">
+                      <p className={`text-xs text-zinc-300 leading-relaxed ${!isExpanded && needsTruncation ? 'line-clamp-2' : ''}`}>{c.text}</p>
+                      {needsTruncation && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setExpandedComments(prev => {
+                              const next = new Set(prev)
+                              if (next.has(i)) next.delete(i); else next.add(i)
+                              return next
+                            })
+                          }}
+                          className="text-[10px] text-indigo-400 hover:text-indigo-300 mt-1 transition-colors"
+                        >
+                          {isExpanded ? 'Show less' : 'Read more'}
+                        </button>
+                      )}
+                      <p className="text-[10px] text-zinc-600 mt-1">@{c.author} · {formatCount(c.likes)} likes</p>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}

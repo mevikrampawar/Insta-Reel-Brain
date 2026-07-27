@@ -35,6 +35,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-force-graph-3d": "^1.29.1",
+    "react-markdown": "^10.1.0",
     "react-tiny-sparkline": "^1.1.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",

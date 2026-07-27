@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
+import Markdown from 'react-markdown'
 import { User, Bot, ArrowUp, Trash2, Copy, Check, RefreshCw, Sparkles } from 'lucide-react'
 import type { Reel } from '../types'
 import { keywordSearch } from '../utils/search'
@@ -39,25 +40,6 @@ function saveHistory(msgs: Message[]) {
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10)
-}
-
-function renderMarkdown(text: string): string {
-  let html = text
-  // Code blocks
-  html = html.replace(/```([\s\S]*?)```/g, '<pre class="bg-muted/50 rounded-lg p-3 text-sm overflow-x-auto my-2"><code>$1</code></pre>')
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, '<code class="bg-muted/50 rounded px-1 py-0.5 text-sm">$1</code>')
-  // Bold
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  // Italic
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-  // Links
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary underline hover:text-primary/80 transition-colors">$1</a>')
-  // Paragraphs
-  html = html.split('\n\n').map(p => `<p class="mb-2 last:mb-0">${p}</p>`).join('')
-  // Line breaks within paragraphs
-  html = html.replace(/\n/g, '<br/>')
-  return html
 }
 
 function buildContext(completeReels: Reel[], query: string) {
@@ -421,10 +403,9 @@ export function Chat({ reels, apiKey, onReelClick }: Props) {
                   >
                     {m.content ? (
                       m.role === 'assistant' ? (
-                        <div
-                          className="prose prose-invert prose-sm max-w-none [&_p]:mb-2 [&_p:last-child]:mb-0 [&_pre]:my-2 [&_code]:text-xs"
-                          dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }}
-                        />
+                        <div className="prose prose-invert prose-sm max-w-none [&_p]:mb-2 [&_p:last-child]:mb-0 [&_pre]:my-2 [&_code]:text-xs">
+                          <Markdown>{m.content}</Markdown>
+                        </div>
                       ) : (
                         <p className="whitespace-pre-wrap">{m.content}</p>
                       )
