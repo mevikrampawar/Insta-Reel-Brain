@@ -278,29 +278,29 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
           {selectMode ? (
             <>
               <button onClick={toggleSelectAll}
-                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-lg transition-colors min-h-[36px]">
-                {selectedIds.size === displayReels.length ? <XCircle size={11} /> : <CheckSquare size={11} />}
+                className="flex items-center gap-1 px-3 py-2 text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[40px]">
+                {selectedIds.size === displayReels.length ? <XCircle size={12} /> : <CheckSquare size={12} />}
                 {selectedIds.size === displayReels.length ? 'Deselect' : 'Select All'}
               </button>
               <span className="text-[11px] text-zinc-500">{selectedIds.size} selected</span>
               <button onClick={exitSelectMode}
-                className="flex items-center gap-1 px-2 py-1.5 text-[11px] text-zinc-400 hover:text-white border border-zinc-700 rounded-lg transition-colors min-h-[36px]">
-                <X size={11} /> Cancel
+                className="flex items-center gap-1 px-3 py-2 text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[40px]">
+                <X size={12} /> Cancel
               </button>
             </>
           ) : (
             <>
               <button onClick={() => { setSelectMode(true); setSelectedIds(new Set()) }}
-                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-lg transition-colors min-h-[36px]">
-                <Square size={11} /> Select
+                className="flex items-center gap-1 sm:gap-1.5 px-3 py-2 text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[40px]">
+                <Square size={12} /> Select
               </button>
               <button onClick={() => downloadCSV(reels)}
-                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-lg transition-colors min-h-[36px]">
-                <Download size={11} /> CSV
+                className="flex items-center gap-1 sm:gap-1.5 px-3 py-2 text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[40px]">
+                <Download size={12} /> CSV
               </button>
               <button onClick={() => setShowStats(!showStats)}
-                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-lg transition-colors min-h-[36px]">
-                <BarChart3 size={11} /> Stats
+                className="flex items-center gap-1 sm:gap-1.5 px-3 py-2 text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[40px]">
+                <BarChart3 size={12} /> Stats
               </button>
             </>
           )}
@@ -352,7 +352,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
         {/* Status filters */}
         {(['all', 'complete', 'processing', 'failed'] as const).map(f => (
           <button key={f} onClick={() => setFilters(prev => ({ ...prev, status: f }))}
-            className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium transition-colors whitespace-nowrap min-h-[32px] ${
+            className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors whitespace-nowrap min-h-[40px] ${
               filters.status === f ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'
             }`}>
             {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -364,7 +364,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
         {/* Collection filter */}
         {collections.length > 0 && (
           <select value={filters.collection} onChange={e => setFilters(prev => ({ ...prev, collection: e.target.value }))}
-            className="bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-[11px] sm:text-xs text-zinc-400 focus:outline-none min-h-[32px] shrink-0">
+            className="bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none min-h-[40px] shrink-0">
             <option value="all">All Collections</option>
             {collections.map(c => (
               <option key={c.id} value={c.id}>{c.name}</option>
@@ -377,8 +377,8 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
         {/* Sort button */}
         <div className="relative">
           <button onClick={() => setShowSortMenu(!showSortMenu)}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[11px] sm:text-xs text-zinc-400 hover:text-white transition-colors whitespace-nowrap min-h-[32px]">
-            <ArrowUpDown size={11} /> {SORT_OPTIONS.find(s => s.key === sort)?.label}
+            className="flex items-center gap-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-zinc-400 hover:text-white transition-colors whitespace-nowrap min-h-[40px]">
+            <ArrowUpDown size={12} /> {SORT_OPTIONS.find(s => s.key === sort)?.label}
           </button>
           {showSortMenu && (
             <div className="absolute top-full left-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 py-1 min-w-[140px]">
@@ -394,10 +394,10 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
 
         {/* Advanced filter toggle */}
         <button onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium transition-colors whitespace-nowrap min-h-[32px] border ${
+          className={`flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium transition-colors whitespace-nowrap min-h-[40px] border ${
             activeFilterCount > 0 ? 'bg-indigo-600/20 border-indigo-500/30 text-indigo-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
           }`}>
-          <Filter size={11} /> Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+          <Filter size={12} /> Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
         </button>
       </div>
 
@@ -417,7 +417,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
             <div className="flex flex-wrap gap-1.5">
               {CATEGORY_OPTIONS.map(cat => (
                 <button key={cat} onClick={() => toggleFilterArray('categories', cat)}
-                  className={`px-2 py-1 rounded text-[11px] transition-colors min-h-[28px] ${
+                  className={`px-3 py-1.5 rounded-lg text-xs transition-colors min-h-[36px] ${
                     filters.categories.includes(cat) ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
                   }`}>
                   {cat}
@@ -432,7 +432,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
             <div className="flex flex-wrap gap-1.5">
               {SENTIMENT_OPTIONS.map(s => (
                 <button key={s} onClick={() => toggleFilterArray('sentiments', s)}
-                  className={`px-2 py-1 rounded text-[11px] transition-colors min-h-[28px] ${
+                  className={`px-3 py-1.5 rounded-lg text-xs transition-colors min-h-[36px] ${
                     filters.sentiments.includes(s) ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
                   }`}>
                   {s}
@@ -447,7 +447,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
             <div className="flex flex-wrap gap-1.5">
               {QUALITY_RANGES.map(q => (
                 <button key={q.label} onClick={() => setFilters(prev => ({ ...prev, qualityMin: q.min }))}
-                  className={`px-2 py-1 rounded text-[11px] transition-colors min-h-[28px] ${
+                  className={`px-3 py-1.5 rounded-lg text-xs transition-colors min-h-[36px] ${
                     filters.qualityMin === q.min ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
                   }`}>
                   {q.label}
@@ -461,7 +461,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
             <div>
               <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Creator</p>
               <select value={filters.creator} onChange={e => setFilters(prev => ({ ...prev, creator: e.target.value }))}
-                className="bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-[11px] sm:text-xs text-zinc-400 focus:outline-none min-h-[32px] w-full sm:w-auto">
+                className="bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none min-h-[40px] w-full sm:w-auto">
                 <option value="all">All Creators</option>
                 {topCreators.map(h => (
                   <option key={h} value={h}>@{h}</option>
@@ -476,7 +476,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
             <div className="flex flex-wrap gap-1.5">
               {DATE_RANGES.map(d => (
                 <button key={d.key} onClick={() => setFilters(prev => ({ ...prev, dateRange: d.key }))}
-                  className={`px-2 py-1 rounded text-[11px] transition-colors min-h-[28px] ${
+                  className={`px-3 py-1.5 rounded-lg text-xs transition-colors min-h-[36px] ${
                     filters.dateRange === d.key ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
                   }`}>
                   {d.label}
@@ -494,14 +494,14 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
 
       {/* Bulk action bar */}
       {selectMode && selectedIds.size > 0 && (
-        <div className="fixed bottom-20 md:bottom-4 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl px-3 py-2 flex items-center gap-2">
+        <div className="fixed bottom-20 md:bottom-4 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-700 rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-3">
           <button onClick={handleBulkDelete}
-            className="flex items-center gap-1.5 px-3 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg text-xs font-medium transition-colors min-h-[36px]">
-            <Trash2 size={12} /> Delete
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
+            <Trash2 size={13} /> Delete
           </button>
           <button onClick={handleBulkReAnalyze}
-            className="flex items-center gap-1.5 px-3 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-lg text-xs font-medium transition-colors min-h-[36px]">
-            <RefreshCw size={12} /> Re-analyze
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
+            <RefreshCw size={13} /> Re-analyze
           </button>
           <button onClick={() => {
             const colId = prompt('Enter collection name to add to (or use existing):')
@@ -512,7 +512,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
               })
             }
           }}
-            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 rounded-lg text-xs font-medium transition-colors min-h-[36px]">
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
             <FolderPlus size={12} /> Collection
           </button>
         </div>

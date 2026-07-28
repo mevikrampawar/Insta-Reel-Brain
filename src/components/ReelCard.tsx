@@ -83,44 +83,44 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
               )}
             </div>
             {/* Right: link + actions */}
-            <div className="flex items-center gap-1 ml-auto shrink-0">
+            <div className="flex items-center gap-0.5 ml-auto shrink-0">
               {reel.url && reel.url !== 'manual-entry' && reel.url.startsWith('https://') && (
                 <a href={reel.url} target="_blank" rel="noopener noreferrer"
-                  className="p-1.5 text-zinc-600 hover:text-indigo-400 transition-colors rounded-lg"
+                  className="p-2 text-zinc-600 hover:text-indigo-400 transition-colors rounded-lg min-w-[36px] min-h-[36px] flex items-center justify-center"
                   title="Open original">
-                  <ExternalLink size={13} />
+                  <ExternalLink size={15} />
                 </a>
               )}
               {onReAnalyze && (
                 <button onClick={() => onReAnalyze(reel.id)}
-                  className="p-1.5 text-zinc-600 hover:text-amber-400 transition-colors rounded-lg"
+                  className="p-2 text-zinc-600 hover:text-amber-400 transition-colors rounded-lg min-w-[36px] min-h-[36px] flex items-center justify-center"
                   title="Re-analyze with AI">
-                  <RefreshCw size={13} />
+                  <RefreshCw size={15} />
                 </button>
               )}
               {onReScrape && reel.url && reel.url !== 'manual-entry' && (
                 <button onClick={() => onReScrape(reel.id)}
-                  className="p-1.5 text-zinc-600 hover:text-emerald-400 transition-colors rounded-lg"
+                  className="p-2 text-zinc-600 hover:text-emerald-400 transition-colors rounded-lg min-w-[36px] min-h-[36px] flex items-center justify-center"
                   title="Re-scrape from source">
-                  <Download size={13} />
+                  <Download size={15} />
                 </button>
               )}
               <button onClick={() => setShowNotes(!showNotes)}
-                className={`p-1.5 rounded-lg transition-colors ${showNotes ? 'bg-amber-500/10 text-amber-400' : 'text-zinc-600 hover:text-amber-400'}`}
+                className={`p-2 rounded-lg transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center ${showNotes ? 'bg-amber-500/10 text-amber-400' : 'text-zinc-600 hover:text-amber-400'}`}
                 title="Notes">
-                <StickyNote size={13} />
+                <StickyNote size={15} />
               </button>
               {collections && collections.length > 0 && (
                 <button onClick={() => setShowCollections(!showCollections)}
-                  className={`p-1.5 rounded-lg transition-colors ${showCollections ? 'bg-indigo-500/10 text-indigo-400' : 'text-zinc-600 hover:text-indigo-400'}`}
+                  className={`p-2 rounded-lg transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center ${showCollections ? 'bg-indigo-500/10 text-indigo-400' : 'text-zinc-600 hover:text-indigo-400'}`}
                   title="Add to collection">
-                  <FolderPlus size={13} />
+                  <FolderPlus size={15} />
                 </button>
               )}
               <button onClick={() => onDelete(reel.id)}
-                className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded-lg"
+                className="p-2 text-zinc-600 hover:text-red-400 transition-colors rounded-lg min-w-[36px] min-h-[36px] flex items-center justify-center"
                 title="Delete">
-                <Trash2 size={13} />
+                <Trash2 size={15} />
               </button>
             </div>
           </div>
