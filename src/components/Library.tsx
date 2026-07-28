@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
-import { Download, BarChart3, BookOpen, Tag, XCircle, ArrowUpDown, CheckSquare, Square, Trash2, FolderPlus, RefreshCw, X, Filter } from 'lucide-react'
+import { Download, BarChart3, BookOpen, Tag, XCircle, ArrowUpDown, CheckSquare, Square, Trash2, FolderPlus, RefreshCw, X, Filter, Zap, AlertTriangle } from 'lucide-react'
 import type { Reel, Collection, SearchResult } from '../types'
 import { ReelCard } from './ReelCard'
 import { SearchBar } from './SearchBar'
@@ -18,6 +18,8 @@ interface Props {
   onReAnalyze?: (ids: string[]) => void
   onReScrape?: (id: string) => void
   libraryFilters?: { categories?: string[]; creator?: string }
+  onBatchReAnalyze?: (ids: string[]) => void
+  onBatchReScrape?: (ids: string[]) => void
 }
 
 type SortKey = 'newest' | 'oldest' | 'mostEngaged' | 'mostViewed' | 'highestQuality' | 'mostTalked'
@@ -80,7 +82,7 @@ function dateInRange(reel: Reel, range: DateRange): boolean {
   return d >= now - ms
 }
 
-export function Library({ reels, onDelete, onDeleteBulk, collections, userId, onAddToCollection, highlightReelId, onClearHighlight, onReAnalyze, onReScrape, libraryFilters }: Props) {
+export function Library({ reels, onDelete, onDeleteBulk, collections, userId, onAddToCollection, highlightReelId, onClearHighlight, onReAnalyze, onReScrape, libraryFilters, onBatchReAnalyze, onBatchReScrape }: Props) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [filters, setFilters] = useState<Filters>({ status: 'all', collection: 'all', categories: [], sentiments: [], qualityMin: 0, creator: 'all', dateRange: 'all' })
   const [sort, setSort] = useState<SortKey>('newest')
@@ -89,6 +91,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showSortMenu, setShowSortMenu] = useState(false)
+  const [showBatchConfirm, setShowBatchConfirm] = useState<'analyze' | 'scrape' | null>(null)
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const reelRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
@@ -240,6 +243,23 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
     exitSelectMode()
   }, [selectedIds, onReAnalyze, exitSelectMode])
 
+  const handleBatchAction = useCallback((type: 'analyze' | 'scrape') => {
+    const completeReels = reels.filter(r => r.ingestStatus === 'complete')
+    if (completeReels.length === 0) return
+    setShowBatchConfirm(type)
+  }, [reels])
+
+  const confirmBatch = useCallback(() => {
+    if (!showBatchConfirm) return
+    const ids = reels.filter(r => r.ingestStatus === 'complete').map(r => r.id)
+    if (showBatchConfirm === 'analyze') {
+      onBatchReAnalyze?.(ids)
+    } else {
+      onBatchReScrape?.(ids)
+    }
+    setShowBatchConfirm(null)
+  }, [showBatchConfirm, reels, onBatchReAnalyze, onBatchReScrape])
+
   return (
     <div className="p-3 sm:p-4 md:p-6 space-y-3 md:space-y-4">
       {/* Header */}
@@ -286,6 +306,22 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
           )}
         </div>
       </div>
+
+      {/* Universal batch buttons */}
+      {!selectMode && reels.filter(r => r.ingestStatus === 'complete').length > 2 && (
+        <div className="flex items-center gap-2">
+          <button onClick={() => handleBatchAction('analyze')}
+            className="flex items-center gap-1.5 px-3 py-2 bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/20 text-purple-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
+            <RefreshCw size={13} /> Re-analyze All
+          </button>
+          {onBatchReScrape && (
+            <button onClick={() => handleBatchAction('scrape')}
+              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
+              <Zap size={13} /> Re-scrape All
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Stats */}
       {showStats && (
@@ -527,6 +563,50 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
           </div>
         )}
       </div>
+
+      {/* Batch confirmation dialog */}
+      {showBatchConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={() => setShowBatchConfirm(null)}>
+          <div className="w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-5"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${showBatchConfirm === 'analyze' ? 'bg-purple-500/10' : 'bg-emerald-500/10'}`}>
+                {showBatchConfirm === 'analyze' ? <RefreshCw size={18} className="text-purple-400" /> : <Zap size={18} className="text-emerald-400" />}
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold">
+                  {showBatchConfirm === 'analyze' ? 'Re-analyze All Reels' : 'Re-scrape All Reels'}
+                </h3>
+                <p className="text-[11px] text-zinc-500">
+                  {reels.filter(r => r.ingestStatus === 'complete').length} reels will be processed
+                </p>
+              </div>
+            </div>
+            <div className="px-3 py-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-4 flex items-start gap-2">
+              <AlertTriangle size={12} className="text-amber-400 mt-0.5 shrink-0" />
+              <p className="text-[10px] text-amber-300/80 leading-relaxed">
+                {showBatchConfirm === 'analyze'
+                  ? `Rate limited to ~7 reels/min (Groq free tier). ${reels.filter(r => r.ingestStatus === 'complete').length} reels will take ~${Math.ceil(reels.filter(r => r.ingestStatus === 'complete').length / 7)} minutes.`
+                  : `Re-scraping is serialized (~1 at a time). ${reels.filter(r => r.ingestStatus === 'complete').length} reels will take several minutes.`
+                } Single reel actions are not affected by this limit.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setShowBatchConfirm(null)}
+                className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-xs font-medium transition-colors">
+                Cancel
+              </button>
+              <button onClick={confirmBatch}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-medium text-white transition-colors ${
+                  showBatchConfirm === 'analyze' ? 'bg-purple-600 hover:bg-purple-500' : 'bg-emerald-600 hover:bg-emerald-500'
+                }`}>
+                {showBatchConfirm === 'analyze' ? 'Start Re-analyzing' : 'Start Re-scraping'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

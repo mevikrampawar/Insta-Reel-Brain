@@ -384,7 +384,7 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
             <div>
               <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 font-medium">Top Comments</p>
               <div className="space-y-2">
-                {reel.topComments.map((c, i) => {
+                {reel.topComments.slice(0, 3).map((c, i) => {
                   const isExpanded = expandedComments.has(i)
                   const needsTruncation = c.text.length > 120
                   return (

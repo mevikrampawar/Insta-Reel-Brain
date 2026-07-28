@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, query, where, orderBy } from 'firebase/firestore'
+import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, query, where } from 'firebase/firestore'
 import { db } from '../services/firebase'
 import type { ReelNote } from '../types'
 
@@ -11,14 +11,16 @@ export function useNotes(userId: string | undefined, reelId?: string) {
     try {
       let q
       if (reelId) {
-        q = query(collection(db, 'users', userId, 'notes'), where('reelId', '==', reelId), orderBy('createdAt', 'desc'))
+        q = query(collection(db, 'users', userId, 'notes'), where('reelId', '==', reelId))
       } else {
-        q = query(collection(db, 'users', userId, 'notes'), orderBy('createdAt', 'desc'))
+        q = query(collection(db, 'users', userId, 'notes'))
       }
       const snap = await getDocs(q)
-      setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() } as ReelNote)))
-    } catch {
-      // Non-fatal: notes just won't load
+      const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() } as ReelNote))
+      fetched.sort((a, b) => b.createdAt - a.createdAt)
+      setNotes(fetched)
+    } catch (e) {
+      console.error('Failed to fetch notes:', e)
     }
   }, [userId, reelId])
 

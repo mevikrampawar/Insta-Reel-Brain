@@ -180,7 +180,7 @@ export async function fetchApifyDataset(
 
   // Parse top comments (Apify uses latestComments)
   const commentsRaw = (item.latestComments || item.comments || []) as Record<string, unknown>[]
-  const topComments = commentsRaw.slice(0, 10).map(c => ({
+  const topComments = commentsRaw.slice(0, 3).map(c => ({
     text: (c.text || '') as string,
     author: ((c.owner as Record<string, unknown>)?.username || c.ownerUsername || '') as string,
     likes: (c.likesCount || c.like_count || 0) as number,
