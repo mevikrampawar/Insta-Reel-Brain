@@ -112,7 +112,7 @@ function corsHeaders() {
 }
 
 async function getAccessToken(env) {
-  console.log('getAccessToken: starting, email:', env.FIREBASE_CLIENT_EMAIL?.slice(0, 30), 'keyLen:', env.FIREBASE_PRIVATE_KEY?.length)
+  console.log('getAccessToken: starting, email:', env.FIREBASE_CLIENT_EMAIL, 'keyLen:', env.FIREBASE_PRIVATE_KEY?.length)
   const now = Math.floor(Date.now() / 1000)
   const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
   const payload = btoa(JSON.stringify({
@@ -156,6 +156,7 @@ function pemToArrayBuffer(pem) {
   // Handle literal \n strings (common when pasting into Cloudflare secrets)
   const normalized = pem.replace(/\\n/g, '\n')
   const b64 = normalized.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s/g, '')
+  console.log('PEM key first20:', b64.slice(0, 20), 'last20:', b64.slice(-20), 'b64len:', b64.length)
   const binary = atob(b64)
   const buffer = new ArrayBuffer(binary.length)
   const view = new Uint8Array(buffer)
