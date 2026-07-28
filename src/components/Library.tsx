@@ -255,12 +255,12 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
   }, [showBatchConfirm, selectedIds, onBatchReAnalyze, onBatchReScrape, exitSelectMode])
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 space-y-3 md:space-y-4">
+    <div className="p-3 sm:p-4 md:p-6 space-y-3 md:space-y-4 max-w-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-start sm:items-center justify-between gap-2">
+        <div className="min-w-0">
           <h2 className="text-lg sm:text-xl font-bold">Library</h2>
-          <p className="text-xs sm:text-sm text-zinc-500">
+          <p className="text-[11px] sm:text-sm text-zinc-500 truncate">
             {displayReels.length === reels.length
               ? `${stats.total} reels · ${stats.complete} analyzed`
               : `${displayReels.length} of ${stats.total} reels`
@@ -268,33 +268,69 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
             {stats.failed > 0 && <span className="text-red-400"> · {stats.failed} failed</span>}
           </p>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap justify-end shrink-0">
           {selectMode ? (
             <>
               <button onClick={toggleSelectAll}
-                className="flex items-center gap-1 px-3 py-2 text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[40px]">
+                className="flex items-center gap-1 px-2 sm:px-3 py-2 text-[11px] sm:text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[36px] sm:min-h-[40px]">
                 {selectedIds.size === displayReels.length ? <XCircle size={12} /> : <CheckSquare size={12} />}
-                {selectedIds.size === displayReels.length ? 'Deselect' : 'Select All'}
+                <span className="hidden sm:inline">{selectedIds.size === displayReels.length ? 'Deselect' : 'Select All'}</span>
               </button>
-              <span className="text-[11px] text-zinc-500">{selectedIds.size} selected</span>
+              <span className="text-[10px] sm:text-[11px] text-zinc-500 tabular-nums">{selectedIds.size}</span>
+              {selectedIds.size > 0 && (
+                <>
+                  <div className="w-px h-3.5 bg-zinc-700 shrink-0" />
+                  <button onClick={handleBulkDelete}
+                    className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+                    title="Delete selected">
+                    <Trash2 size={13} />
+                  </button>
+                  <button onClick={() => handleBatchAction('analyze')}
+                    className="p-2 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 rounded-xl transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+                    title="Re-analyze selected">
+                    <RefreshCw size={13} />
+                  </button>
+                  {onBatchReScrape && (
+                    <button onClick={() => handleBatchAction('scrape')}
+                      className="p-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-xl transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+                      title="Re-scrape selected">
+                      <Zap size={13} />
+                    </button>
+                  )}
+                  <button onClick={() => {
+                    const colId = prompt('Enter collection name to add to (or use existing):')
+                    if (colId) {
+                      selectedIds.forEach(id => {
+                        const col = collections.find(c => c.name.toLowerCase() === colId.toLowerCase())
+                        if (col) onAddToCollection(id, col.id)
+                      })
+                    }
+                  }}
+                    className="p-2 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-xl transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+                    title="Add to collection">
+                    <FolderPlus size={13} />
+                  </button>
+                </>
+              )}
               <button onClick={exitSelectMode}
-                className="flex items-center gap-1 px-3 py-2 text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[40px]">
-                <X size={12} /> Cancel
+                className="p-2 text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+                title="Cancel selection">
+                <X size={13} />
               </button>
             </>
           ) : (
             <>
               <button onClick={() => { setSelectMode(true); setSelectedIds(new Set()) }}
-                className="flex items-center gap-1 sm:gap-1.5 px-3 py-2 text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[40px]">
-                <Square size={12} /> Select
+                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 text-[11px] sm:text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[36px] sm:min-h-[40px]">
+                <Square size={12} /> <span className="hidden sm:inline">Select</span>
               </button>
               <button onClick={() => downloadCSV(reels)}
-                className="flex items-center gap-1 sm:gap-1.5 px-3 py-2 text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[40px]">
-                <Download size={12} /> CSV
+                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 text-[11px] sm:text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[36px] sm:min-h-[40px]">
+                <Download size={12} /> <span className="hidden sm:inline">CSV</span>
               </button>
               <button onClick={() => setShowStats(!showStats)}
-                className="flex items-center gap-1 sm:gap-1.5 px-3 py-2 text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[40px]">
-                <BarChart3 size={12} /> Stats
+                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 text-[11px] sm:text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-xl transition-colors min-h-[36px] sm:min-h-[40px]">
+                <BarChart3 size={12} /> <span className="hidden sm:inline">Stats</span>
               </button>
             </>
           )}
@@ -326,7 +362,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
       <SearchBar reels={reels} onResults={setSearchResults} />
 
       {/* Filter bar — status + sort + filter toggle */}
-      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+      <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
         {/* Status filters */}
         {(['all', 'complete', 'processing', 'failed'] as const).map(f => (
           <button key={f} onClick={() => setFilters(prev => ({ ...prev, status: f }))}
@@ -468,38 +504,6 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
       {/* Results count */}
       {(searchResults.length > 0 || displayReels.length !== reels.length) && (
         <p className="text-[11px] text-zinc-500">{displayReels.length} results found</p>
-      )}
-
-      {/* Bulk action bar */}
-      {selectMode && selectedIds.size > 0 && (
-        <div className="fixed bottom-20 md:bottom-4 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-700 rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-2 flex-wrap justify-center">
-          <button onClick={handleBulkDelete}
-            className="flex items-center gap-1.5 px-3 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
-            <Trash2 size={13} /> Delete
-          </button>
-          <button onClick={() => handleBatchAction('analyze')}
-            className="flex items-center gap-1.5 px-3 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
-            <RefreshCw size={13} /> Re-analyze
-          </button>
-          {onBatchReScrape && (
-            <button onClick={() => handleBatchAction('scrape')}
-              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
-              <Zap size={13} /> Re-scrape
-            </button>
-          )}
-          <button onClick={() => {
-            const colId = prompt('Enter collection name to add to (or use existing):')
-            if (colId) {
-              selectedIds.forEach(id => {
-                const col = collections.find(c => c.name.toLowerCase() === colId.toLowerCase())
-                if (col) onAddToCollection(id, col.id)
-              })
-            }
-          }}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
-            <FolderPlus size={12} /> Collection
-          </button>
-        </div>
       )}
 
       {/* Reel grid — responsive columns */}

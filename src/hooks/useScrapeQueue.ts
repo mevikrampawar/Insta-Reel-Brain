@@ -20,6 +20,27 @@ export interface ScrapeJob {
 const POLL_MS = 3000
 const TIMEOUT_MS = 120_000
 const STORAGE_KEY = 'reelbrain-scrape-queue'
+const PROCESSED_URLS_KEY = 'reelbrain-processed-urls'
+
+// Persistent set of URLs that have been successfully scraped/ingested.
+// Prevents re-adding the same URL on page reload (critical for iOS Safari
+// where history.replaceState may not persist across full reloads).
+function loadProcessedUrls(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PROCESSED_URLS_KEY)
+    if (!raw) return new Set()
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) ? new Set(arr) : new Set()
+  } catch { return new Set() }
+}
+
+function persistProcessedUrls(urls: Set<string>) {
+  try {
+    // Keep at most 500 entries to avoid storage bloat
+    const arr = [...urls].slice(-500)
+    localStorage.setItem(PROCESSED_URLS_KEY, JSON.stringify(arr))
+  } catch { /* ignore */ }
+}
 
 // Only persist essential fields to localStorage (skip large result/source objects)
 function serializeJob(job: ScrapeJob): ScrapeJob {
@@ -69,6 +90,7 @@ export function useScrapeQueue(
   onMasterKeyUsed?: () => Promise<void>,
 ) {
   const [jobs, setJobs] = useState<ScrapeJob[]>(loadPersistedJobs)
+  const [processedUrls, setProcessedUrls] = useState<Set<string>>(loadProcessedUrls)
   const mounted = useRef(true)
   const polling = useRef<Set<string>>(new Set())
 
@@ -76,6 +98,9 @@ export function useScrapeQueue(
 
   // Persist jobs to localStorage whenever they change
   useEffect(() => { persistJobs(jobs) }, [jobs])
+
+  // Persist processed URLs
+  useEffect(() => { persistProcessedUrls(processedUrls) }, [processedUrls])
 
   const patch = useCallback((id: string, change: Partial<ScrapeJob>) => {
     setJobs(prev => prev.map(j => j.id === id ? { ...j, ...change } : j))
@@ -160,6 +185,8 @@ export function useScrapeQueue(
       }
 
       patch(job.id, { phase: 'complete' })
+      // Mark URL as processed to prevent re-scraping across reloads
+      setProcessedUrls(prev => new Set([...prev, job.url.trim().replace(/\/+$/, '')]))
       if (onMasterKeyUsed) onMasterKeyUsed().catch(() => {})
       setTimeout(() => { if (mounted.current) remove(job.id) }, 5000)
       return true
@@ -218,6 +245,21 @@ export function useScrapeQueue(
   }, [jobs])
 
   const addJob = useCallback(async (url: string, source?: 'manual' | 'upload' | 'telegram' | 'ios-shortcut') => {
+    // Normalize for dedup
+    const normalized = url.trim().replace(/\/+$/, '')
+
+    // Check persistent processed set — prevents re-scraping across reloads
+    for (const pu of processedUrls) {
+      if (normalized.includes(pu) || pu.includes(normalized)) return
+    }
+
+    // Check in-progress queue
+    const exists = jobs.some(j => {
+      const jNorm = j.url.trim().replace(/\/+$/, '')
+      return (jNorm === normalized || normalized.includes(jNorm) || jNorm.includes(normalized)) && j.phase !== 'failed'
+    })
+    if (exists) return
+
     const id = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
     setJobs(prev => [...prev, { id, url, phase: 'queued', reelSource: source }])
@@ -228,7 +270,7 @@ export function useScrapeQueue(
     } catch (e) {
       setJobs(prev => prev.map(j => j.id === id ? { ...j, phase: 'failed' as const, error: e instanceof Error ? e.message : 'Failed to start' } : j))
     }
-  }, [apifyApiKey])
+  }, [apifyApiKey, jobs, processedUrls])
 
   return { jobs, addJob, removeJob: remove }
 }

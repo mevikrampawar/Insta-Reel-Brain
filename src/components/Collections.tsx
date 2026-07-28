@@ -96,13 +96,13 @@ export function Collections({ collections, reels, onAdd, onDelete, onRename, onB
   )
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold">Collections</h2>
-          <p className="text-sm text-zinc-500">{collections.length} collections · {reels.filter(r => r.ingestStatus === 'complete').length} reels classified</p>
+    <div className="p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4 max-w-full overflow-hidden">
+      <div className="flex items-start sm:items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="text-lg sm:text-xl font-bold">Collections</h2>
+          <p className="text-[11px] sm:text-sm text-zinc-500 truncate">{collections.length} collections · {reels.filter(r => r.ingestStatus === 'complete').length} reels classified</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap justify-end shrink-0">
           {batchMode ? (
             <>
               <span className="text-xs text-zinc-400">{selectedIds.size} selected</span>
@@ -296,7 +296,7 @@ export function Collections({ collections, reels, onAdd, onDelete, onRename, onB
 
           return (
             <div key={c.id} className={`bg-zinc-900 border rounded-xl overflow-hidden transition-colors ${isSelected ? 'border-indigo-500/50 bg-indigo-500/5' : 'border-zinc-800'}`}>
-              <div className="flex items-center gap-3 p-4 min-h-[56px] cursor-pointer hover:bg-zinc-800/50 transition-colors"
+              <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 min-h-[48px] sm:min-h-[56px] cursor-pointer hover:bg-zinc-800/50 transition-colors"
                 onClick={() => {
                   if (batchMode) { toggleSelect(c.id); return }
                   setExpandedId(isExpanded ? null : c.id)

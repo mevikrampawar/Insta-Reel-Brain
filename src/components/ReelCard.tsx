@@ -64,63 +64,63 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
       {/* === TOP SECTION: Creator + Title + Summary === */}
-      <div className="p-4">
+      <div className="p-3 sm:p-4">
         {/* Row 1: Creator info */}
         {reel.creatorHandle && (
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 mb-2">
             {/* Avatar placeholder */}
             <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+              className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[9px] sm:text-[10px] font-bold text-white shrink-0"
               style={{ background: hashColor(reel.creatorHandle) }}
             >
               {reel.creatorHandle[0]?.toUpperCase()}
             </div>
-            <div className="flex items-center gap-1 min-w-0">
-              <span className="text-xs font-medium text-zinc-300 truncate">@{reel.creatorHandle}</span>
+            <div className="flex items-center gap-1 min-w-0 flex-1">
+              <span className="text-[11px] sm:text-xs font-medium text-zinc-300 truncate">@{reel.creatorHandle}</span>
               {reel.creatorVerified && <Shield size={10} className="text-blue-400 shrink-0" />}
               {reel.creatorFollowers > 0 && (
-                <span className="text-[10px] text-zinc-600 shrink-0">· {formatCount(reel.creatorFollowers)}</span>
+                <span className="text-[9px] sm:text-[10px] text-zinc-600 shrink-0">· {formatCount(reel.creatorFollowers)}</span>
               )}
             </div>
-            {/* Right: link + actions */}
-            <div className="flex items-center gap-0.5 ml-auto shrink-0">
+            {/* Right: link + actions — compact on mobile */}
+            <div className="flex items-center gap-0 shrink-0">
               {reel.url && reel.url !== 'manual-entry' && reel.url.startsWith('https://') && (
                 <a href={reel.url} target="_blank" rel="noopener noreferrer"
-                  className="p-2 text-zinc-600 hover:text-indigo-400 transition-colors rounded-lg min-w-[36px] min-h-[36px] flex items-center justify-center"
+                  className="p-1.5 sm:p-2 text-zinc-600 hover:text-indigo-400 transition-colors rounded-lg min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center"
                   title="Open original">
-                  <ExternalLink size={15} />
+                  <ExternalLink size={14} />
                 </a>
               )}
               {onReAnalyze && (
                 <button onClick={() => onReAnalyze(reel.id)}
-                  className="p-2 text-zinc-600 hover:text-amber-400 transition-colors rounded-lg min-w-[36px] min-h-[36px] flex items-center justify-center"
+                  className="p-1.5 sm:p-2 text-zinc-600 hover:text-amber-400 transition-colors rounded-lg min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center"
                   title="Re-analyze with AI">
-                  <RefreshCw size={15} />
+                  <RefreshCw size={14} />
                 </button>
               )}
               {onReScrape && reel.url && reel.url !== 'manual-entry' && (
                 <button onClick={() => onReScrape(reel.id)}
-                  className="p-2 text-zinc-600 hover:text-emerald-400 transition-colors rounded-lg min-w-[36px] min-h-[36px] flex items-center justify-center"
+                  className="p-1.5 sm:p-2 text-zinc-600 hover:text-emerald-400 transition-colors rounded-lg min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center"
                   title="Re-scrape from source">
-                  <Download size={15} />
+                  <Download size={14} />
                 </button>
               )}
               <button onClick={() => setShowNotes(!showNotes)}
-                className={`p-2 rounded-lg transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center ${showNotes ? 'bg-amber-500/10 text-amber-400' : 'text-zinc-600 hover:text-amber-400'}`}
+                className={`p-1.5 sm:p-2 rounded-lg transition-colors min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center ${showNotes ? 'bg-amber-500/10 text-amber-400' : 'text-zinc-600 hover:text-amber-400'}`}
                 title="Notes">
-                <StickyNote size={15} />
+                <StickyNote size={14} />
               </button>
               {collections && collections.length > 0 && (
                 <button onClick={() => setShowCollections(!showCollections)}
-                  className={`p-2 rounded-lg transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center ${showCollections ? 'bg-indigo-500/10 text-indigo-400' : 'text-zinc-600 hover:text-indigo-400'}`}
+                  className={`p-1.5 sm:p-2 rounded-lg transition-colors min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center ${showCollections ? 'bg-indigo-500/10 text-indigo-400' : 'text-zinc-600 hover:text-indigo-400'}`}
                   title="Add to collection">
-                  <FolderPlus size={15} />
+                  <FolderPlus size={14} />
                 </button>
               )}
               <button onClick={() => onDelete(reel.id)}
-                className="p-2 text-zinc-600 hover:text-red-400 transition-colors rounded-lg min-w-[36px] min-h-[36px] flex items-center justify-center"
+                className="p-1.5 sm:p-2 text-zinc-600 hover:text-red-400 transition-colors rounded-lg min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center"
                 title="Delete">
-                <Trash2 size={15} />
+                <Trash2 size={14} />
               </button>
             </div>
           </div>

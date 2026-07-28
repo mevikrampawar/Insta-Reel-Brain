@@ -173,7 +173,7 @@ export function Layout({ children, nav, onNavChange, onLogout, userPhoto, needsA
       </aside>
 
       {/* ── Mobile header ──────────────────────────────── */}
-      <header className="md:hidden flex items-center justify-between px-4 py-3 shrink-0 glass-strong border-b border-white/5">
+      <header className="md:hidden flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 shrink-0 glass-strong border-b border-white/5">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-md shadow-primary/20">
             <Brain size={14} />
@@ -260,7 +260,7 @@ export function Layout({ children, nav, onNavChange, onLogout, userPhoto, needsA
       </AnimatePresence>
 
       {/* ── Main content ───────────────────────────────── */}
-      <main className="flex-1 overflow-auto pb-20 md:pb-0">
+      <main className="flex-1 overflow-auto pb-[max(4.5rem,calc(4.5rem+env(safe-area-inset-bottom)))] md:pb-0">
         {/* Dismissible API setup banner */}
         {showBanner && (
           <div className="mx-3 mt-3 px-4 py-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-3 text-sm">
@@ -287,7 +287,7 @@ export function Layout({ children, nav, onNavChange, onLogout, userPhoto, needsA
       </main>
 
       {/* ── Mobile bottom nav ──────────────────────────── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 glass-strong border-t border-white/5 flex justify-around items-center px-1 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] shrink-0 z-40">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 glass-strong border-t border-white/5 flex justify-around items-center px-1 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] shrink-0 z-40 safe-bottom">
         {primaryTabs.map((t) => {
           const active = nav.tab === t.id
           return (

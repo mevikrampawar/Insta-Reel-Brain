@@ -77,18 +77,26 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
     if (deepUrl) {
       // Validate URL looks like an Instagram reel before processing
       if (!/^https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p)\/[\w-]+/.test(deepUrl)) return
-      window.history.replaceState(null, '', `#ingest`)
+
+      // Clean the URL from address bar immediately to prevent re-processing on reload
+      // Use both replaceState and clear sessionStorage to cover all browsers
+      try {
+        window.history.replaceState(null, '', `#ingest`)
+        sessionStorage.removeItem('reelbrain-pending-deep-url')
+      } catch { /* ignore */ }
+
+      // Skip if this reel already exists in the library
+      const alreadyExists = reels.some(r => r.url === deepUrl || r.url?.includes(deepUrl) || deepUrl.includes(r.url || ''))
+      if (alreadyExists) return
+
       setNav({ tab: 'ingest' })
       try { localStorage.setItem('reelbrain-tab', 'ingest') } catch { /* ignore */ }
-      // Only add if not already in queue
-      const urlExists = jobs.some(j => j.url === deepUrl)
-      if (!urlExists) {
-        const timer = setTimeout(() => addJob(deepUrl, 'ios-shortcut'), 100)
-        return () => clearTimeout(timer)
-      }
+      // addJob has built-in dedup against processed URLs and in-progress queue
+      const timer = setTimeout(() => addJob(deepUrl, 'ios-shortcut'), 100)
+      return () => clearTimeout(timer)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiCtx.loading])
+  }, [apiCtx.loading, reels])
 
   // Listen for pending URLs written by Cloudflare Worker (iOS Shortcut background relay)
   useEffect(() => {
@@ -99,9 +107,17 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
         if (change.type === 'added') {
           const data = change.doc.data()
           const url = data.url as string
-          if (url && !jobs.some(j => j.url === url)) {
-            addJob(url, (data.source as 'ios-shortcut') || 'ios-shortcut')
+          if (!url) continue
+
+          // Skip if reel already exists in library
+          const alreadyExists = reels.some(r => r.url === url || r.url?.includes(url) || url.includes(r.url || ''))
+          if (alreadyExists) {
+            deleteDoc(doc(db, 'users', user.uid, 'pendingUrls', change.doc.id)).catch(() => {})
+            continue
           }
+
+          // addJob has built-in dedup against processed URLs and in-progress queue
+          addJob(url, (data.source as 'ios-shortcut') || 'ios-shortcut')
           // Clean up the pending URL document
           deleteDoc(doc(db, 'users', user.uid, 'pendingUrls', change.doc.id)).catch(() => {})
         }
@@ -109,7 +125,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
     }, () => { /* listener error — non-fatal */ })
     return unsub
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiCtx.loading])
+  }, [apiCtx.loading, reels])
 
   // Clipboard detection — check for Instagram URLs when app loads
   useEffect(() => {
