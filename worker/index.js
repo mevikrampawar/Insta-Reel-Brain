@@ -112,6 +112,7 @@ function corsHeaders() {
 }
 
 async function getAccessToken(env) {
+  console.log('getAccessToken: starting, email:', env.FIREBASE_CLIENT_EMAIL?.slice(0, 30), 'keyLen:', env.FIREBASE_PRIVATE_KEY?.length)
   const now = Math.floor(Date.now() / 1000)
   const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
   const payload = btoa(JSON.stringify({
@@ -123,9 +124,11 @@ async function getAccessToken(env) {
   }))
 
   const encoder = new TextEncoder()
+  const keyBuffer = pemToArrayBuffer(env.FIREBASE_PRIVATE_KEY)
+  console.log('getAccessToken: parsed key buffer length:', keyBuffer.byteLength)
   const key = await crypto.subtle.importKey(
     'pkcs8',
-    pemToArrayBuffer(env.FIREBASE_PRIVATE_KEY),
+    keyBuffer,
     { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
     false,
     ['sign'],
@@ -137,8 +140,9 @@ async function getAccessToken(env) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${header}.${payload}.${btoa(String.fromCharCode(...new Uint8Array(signature)))}`,
   })
-  const { access_token } = await res.json()
-  return access_token
+  const tokenData = await res.json()
+  console.log('getAccessToken: token response status:', res.status, 'has_token:', !!tokenData.access_token, 'error:', tokenData.error)
+  return tokenData.access_token
 }
 
 function pemToArrayBuffer(pem) {
