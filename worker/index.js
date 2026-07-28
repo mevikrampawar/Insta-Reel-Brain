@@ -152,10 +152,11 @@ async function getAccessToken(env) {
   return tokenData.access_token
 }
 
-function pemToArrayBuffer(pem) {
-  // Handle literal \n strings (common when pasting into Cloudflare secrets)
-  const normalized = pem.replace(/\\n/g, '\n')
-  const b64 = normalized.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s/g, '')
+function pemToArrayBuffer(pemB64) {
+  // The secret is base64-encoded to prevent Cloudflare from mangling the PEM key.
+  // Decode base64 to get the actual PEM string.
+  const pem = atob(pemB64)
+  const b64 = pem.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s/g, '')
   console.log('PEM key first20:', b64.slice(0, 20), 'last20:', b64.slice(-20), 'b64len:', b64.length)
   const binary = atob(b64)
   const buffer = new ArrayBuffer(binary.length)
