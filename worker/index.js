@@ -142,7 +142,9 @@ async function getAccessToken(env) {
 }
 
 function pemToArrayBuffer(pem) {
-  const b64 = pem.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s/g, '')
+  // Handle literal \n strings (common when pasting into Cloudflare secrets)
+  const normalized = pem.replace(/\\n/g, '\n')
+  const b64 = normalized.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s/g, '')
   const binary = atob(b64)
   const buffer = new ArrayBuffer(binary.length)
   const view = new Uint8Array(buffer)
