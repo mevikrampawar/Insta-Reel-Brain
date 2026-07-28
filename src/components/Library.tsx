@@ -237,28 +237,22 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
     }
   }, [selectedIds, onDeleteBulk, exitSelectMode])
 
-  const handleBulkReAnalyze = useCallback(() => {
-    if (selectedIds.size === 0) return
-    onReAnalyze?.([...selectedIds])
-    exitSelectMode()
-  }, [selectedIds, onReAnalyze, exitSelectMode])
-
   const handleBatchAction = useCallback((type: 'analyze' | 'scrape') => {
-    const completeReels = reels.filter(r => r.ingestStatus === 'complete')
-    if (completeReels.length === 0) return
+    if (selectedIds.size === 0) return
     setShowBatchConfirm(type)
-  }, [reels])
+  }, [selectedIds])
 
   const confirmBatch = useCallback(() => {
     if (!showBatchConfirm) return
-    const ids = reels.filter(r => r.ingestStatus === 'complete').map(r => r.id)
+    const ids = [...selectedIds]
     if (showBatchConfirm === 'analyze') {
       onBatchReAnalyze?.(ids)
     } else {
       onBatchReScrape?.(ids)
     }
     setShowBatchConfirm(null)
-  }, [showBatchConfirm, reels, onBatchReAnalyze, onBatchReScrape])
+    exitSelectMode()
+  }, [showBatchConfirm, selectedIds, onBatchReAnalyze, onBatchReScrape, exitSelectMode])
 
   return (
     <div className="p-3 sm:p-4 md:p-6 space-y-3 md:space-y-4">
@@ -306,22 +300,6 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
           )}
         </div>
       </div>
-
-      {/* Universal batch buttons */}
-      {!selectMode && reels.filter(r => r.ingestStatus === 'complete').length > 2 && (
-        <div className="flex items-center gap-2">
-          <button onClick={() => handleBatchAction('analyze')}
-            className="flex items-center gap-1.5 px-3 py-2 bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/20 text-purple-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
-            <RefreshCw size={13} /> Re-analyze All
-          </button>
-          {onBatchReScrape && (
-            <button onClick={() => handleBatchAction('scrape')}
-              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
-              <Zap size={13} /> Re-scrape All
-            </button>
-          )}
-        </div>
-      )}
 
       {/* Stats */}
       {showStats && (
@@ -494,15 +472,21 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
 
       {/* Bulk action bar */}
       {selectMode && selectedIds.size > 0 && (
-        <div className="fixed bottom-20 md:bottom-4 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-700 rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-3">
+        <div className="fixed bottom-20 md:bottom-4 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-700 rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-2 flex-wrap justify-center">
           <button onClick={handleBulkDelete}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
+            className="flex items-center gap-1.5 px-3 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
             <Trash2 size={13} /> Delete
           </button>
-          <button onClick={handleBulkReAnalyze}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
+          <button onClick={() => handleBatchAction('analyze')}
+            className="flex items-center gap-1.5 px-3 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
             <RefreshCw size={13} /> Re-analyze
           </button>
+          {onBatchReScrape && (
+            <button onClick={() => handleBatchAction('scrape')}
+              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-xl text-xs font-medium transition-colors min-h-[40px]">
+              <Zap size={13} /> Re-scrape
+            </button>
+          )}
           <button onClick={() => {
             const colId = prompt('Enter collection name to add to (or use existing):')
             if (colId) {
@@ -576,10 +560,10 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
               </div>
               <div>
                 <h3 className="text-sm font-semibold">
-                  {showBatchConfirm === 'analyze' ? 'Re-analyze All Reels' : 'Re-scrape All Reels'}
+                  {showBatchConfirm === 'analyze' ? 'Re-analyze Reels' : 'Re-scrape Reels'}
                 </h3>
                 <p className="text-[11px] text-zinc-500">
-                  {reels.filter(r => r.ingestStatus === 'complete').length} reels will be processed
+                  {selectedIds.size} selected reel{selectedIds.size !== 1 ? 's' : ''} will be processed
                 </p>
               </div>
             </div>
@@ -587,9 +571,9 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
               <AlertTriangle size={12} className="text-amber-400 mt-0.5 shrink-0" />
               <p className="text-[10px] text-amber-300/80 leading-relaxed">
                 {showBatchConfirm === 'analyze'
-                  ? `Rate limited to ~7 reels/min (Groq free tier). ${reels.filter(r => r.ingestStatus === 'complete').length} reels will take ~${Math.ceil(reels.filter(r => r.ingestStatus === 'complete').length / 7)} minutes.`
-                  : `Re-scraping is serialized (~1 at a time). ${reels.filter(r => r.ingestStatus === 'complete').length} reels will take several minutes.`
-                } Single reel actions are not affected by this limit.
+                  ? `Rate limited to ~7 reels/min (Groq free tier). ${selectedIds.size} reels will take ~${Math.ceil(selectedIds.size / 7)} min.`
+                  : `Re-scraping is serialized (~1 at a time). ${selectedIds.size} reels will take several minutes.`
+                } Single reel actions are not affected.
               </p>
             </div>
             <div className="flex gap-2">

@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Plus, FolderOpen, Trash2, ChevronRight, X, Tag, ArrowRight, RefreshCw, Loader2, Pencil, GitMerge, GripVertical, CheckSquare, Square } from 'lucide-react'
+import { Plus, FolderOpen, Trash2, ChevronRight, X, Tag, ArrowRight, RefreshCw, Loader2, Pencil, GitMerge, GripVertical, CheckSquare, Square, Download } from 'lucide-react'
 import type { Collection, Reel } from '../types'
+import { downloadCSV } from '../utils/export'
 
 interface Props {
   collections: Collection[]
@@ -108,6 +109,13 @@ export function Collections({ collections, reels, onAdd, onDelete, onRename, onB
               <button onClick={selectAll}
                 className="flex items-center gap-1.5 px-3 min-h-[44px] bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm font-medium transition-colors">
                 {selectedIds.size === collections.length ? 'Deselect All' : 'Select All'}
+              </button>
+              <button onClick={() => {
+                  const selectedReels = reels.filter(r => r.ingestStatus === 'complete' && collections.some(c => selectedIds.has(c.id) && c.reelIds?.includes(r.id)))
+                  downloadCSV(selectedReels)
+                }} disabled={selectedIds.size === 0}
+                className="flex items-center gap-1.5 px-3 min-h-[44px] bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
+                <Download size={14} /> CSV
               </button>
               <button onClick={() => setShowBatchMergePanel(true)} disabled={selectedIds.size < 2}
                 className="flex items-center gap-1.5 px-3 min-h-[44px] bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors">
