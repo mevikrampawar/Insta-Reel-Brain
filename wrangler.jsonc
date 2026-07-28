@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "reel-brain-relay",
+  "main": "worker/index.js",
   "compatibility_date": "2026-07-28",
   "observability": {
     "enabled": true

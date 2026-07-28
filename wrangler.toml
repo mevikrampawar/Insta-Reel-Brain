@@ -1,3 +1,0 @@
-name = "reel-brain-relay"
-main = "worker/index.js"
-compatibility_date = "2026-07-28"
