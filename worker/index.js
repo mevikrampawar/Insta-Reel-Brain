@@ -133,15 +133,22 @@ async function getAccessToken(env) {
     false,
     ['sign'],
   )
-  const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, encoder.encode(`${header}.${payload}`))
+  const dataToSign = encoder.encode(`${header}.${payload}`)
+  const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, dataToSign)
+  const sigBytes = new Uint8Array(signature)
+  let sigB64 = ''
+  for (let i = 0; i < sigBytes.length; i++) sigB64 += String.fromCharCode(sigBytes[i])
+
+  const assertion = `${header}.${payload}.${btoa(sigB64)}`
+  console.log('getAccessToken: assertion length:', assertion.length, 'sig bytes:', sigBytes.length)
 
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${header}.${payload}.${btoa(String.fromCharCode(...new Uint8Array(signature)))}`,
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${assertion}`,
   })
   const tokenData = await res.json()
-  console.log('getAccessToken: token response status:', res.status, 'has_token:', !!tokenData.access_token, 'error:', tokenData.error)
+  console.log('getAccessToken: token response status:', res.status, 'has_token:', !!tokenData.access_token, 'error:', tokenData.error, 'error_description:', tokenData.error_description)
   return tokenData.access_token
 }
 
