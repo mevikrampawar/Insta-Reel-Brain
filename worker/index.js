@@ -27,10 +27,25 @@ export default {
     }
 
     try {
-      const { url, userId } = await request.json()
+      const bodyText = await request.text()
+      let url, userId
+
+      // Try JSON parse first
+      try {
+        const parsed = JSON.parse(bodyText)
+        url = parsed.url
+        userId = parsed.userId
+      } catch {
+        // Fallback: try form-encoded (key=value&key=value)
+        const params = new URLSearchParams(bodyText)
+        url = params.get('url')
+        userId = params.get('userId')
+      }
+
+      console.log('Relay received:', { url: url?.slice(0, 80), userId: userId?.slice(0, 20), bodyLen: bodyText.length })
 
       if (!url || !userId) {
-        return new Response(JSON.stringify({ error: 'Missing url or userId' }), {
+        return new Response(JSON.stringify({ error: 'Missing url or userId', receivedKeys: Object.keys(JSON.parse(bodyText || '{}')) }), {
           status: 400,
           headers: { 'Content-Type': 'application/json', ...corsHeaders() },
         })
@@ -79,7 +94,8 @@ export default {
         headers: { 'Content-Type': 'application/json', ...corsHeaders() },
       })
     } catch (e) {
-      return new Response(JSON.stringify({ error: 'Invalid request' }), {
+      console.error('Relay error:', e.message)
+      return new Response(JSON.stringify({ error: 'Invalid request', detail: e.message }), {
         status: 400,
         headers: { 'Content-Type': 'application/json', ...corsHeaders() },
       })
