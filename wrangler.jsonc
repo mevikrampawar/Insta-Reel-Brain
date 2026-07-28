@@ -2,14 +2,5 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "reel-brain-relay",
   "main": "worker/index.js",
-  "compatibility_date": "2026-07-28",
-  "observability": {
-    "enabled": true
-  },
-  "assets": {
-    "not_found_handling": "single-page-application"
-  },
-  "compatibility_flags": [
-    "nodejs_compat"
-  ]
+  "compatibility_date": "2026-07-28"
 }
