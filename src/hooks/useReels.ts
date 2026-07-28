@@ -30,7 +30,7 @@ export function useReels(userId: string | undefined) {
   const addReel = useCallback(async (data: Partial<Reel>) => {
     if (!userId) return
     try {
-      const ref = await addDoc(getUserReels(userId), { ...data, userId, ingestStatus: 'queued', createdAt: Date.now(), updatedAt: Date.now() })
+      const ref = await addDoc(getUserReels(userId), { ...data, userId: userId, ingestStatus: 'queued', createdAt: Date.now(), updatedAt: Date.now() })
       await fetchReels()
       return ref.id
     } catch (e) {

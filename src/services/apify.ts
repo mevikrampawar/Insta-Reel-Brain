@@ -55,16 +55,23 @@ async function apifyFetch(
   method: string = 'GET',
   payload?: object,
 ): Promise<unknown> {
-  const res = await fetch(`${APIFY_BASE}/${endpoint}`, {
-    method,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    ...(payload ? { body: JSON.stringify(payload) } : {}),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.error || `Apify error: ${res.status}`)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 30000)
+  try {
+    const res = await fetch(`${APIFY_BASE}/${endpoint}`, {
+      method,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || `Apify error: ${res.status}`)
+    }
+    return res.json()
+  } finally {
+    clearTimeout(timeout)
   }
-  return res.json()
 }
 
 export async function startApifyRun(

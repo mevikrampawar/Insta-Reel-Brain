@@ -94,6 +94,16 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
   const [showBatchConfirm, setShowBatchConfirm] = useState<'analyze' | 'scrape' | null>(null)
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const reelRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const sortMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showSortMenu) return
+    const handler = (e: MouseEvent) => {
+      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) setShowSortMenu(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showSortMenu])
 
   // Apply filters from external navigation (e.g. Dashboard clicking a category)
   useEffect(() => {
@@ -389,7 +399,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
         <div className="w-px h-4 bg-zinc-700 shrink-0" />
 
         {/* Sort button */}
-        <div className="relative">
+        <div className="relative" ref={sortMenuRef}>
           <button onClick={() => setShowSortMenu(!showSortMenu)}
             className="flex items-center gap-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-zinc-400 hover:text-white transition-colors whitespace-nowrap min-h-[40px]">
             <ArrowUpDown size={12} /> {SORT_OPTIONS.find(s => s.key === sort)?.label}

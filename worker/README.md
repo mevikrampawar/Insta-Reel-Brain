@@ -52,9 +52,9 @@ Replace the old shortcut with this flow:
    - Headers: `Content-Type` = `application/json`
    - Request Body: **JSON**
      - Key: `url`, Value: `[Shortcut Input]`
-     - Key: `userId`, Value: `YOUR_FIREBASE_UID` (find in Firebase Console → Authentication → Users)
+     - Key: `userId`, Value: **copy from the app** — open Reel Brain → Settings → iOS Background Relay → tap copy next to your User ID
 4. **Action 3:** Add Action → search "Show notification" → **Show Notification**
-   - Text: `Reel saved! Open Reel Brain to process it.`
+   - Text: `Reel saved! Open Reel Brain to see it processing.`
 5. Rename shortcut to **"Save to Reel Brain"** → Done
 
 ### 6. How It Works

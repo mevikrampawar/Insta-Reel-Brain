@@ -21,6 +21,7 @@ import { Settings } from './components/Settings'
 import { DataSources } from './components/DataSources'
 import { DashboardView } from './components/DashboardView'
 import { BatchProgressDialog } from './components/BatchProgressDialog'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { startTour, isTourCompleted } from './lib/tour'
 
 const VALID_TABS = ['dashboard', 'library', 'ingest', 'chat', 'graph', 'collections', 'datasources', 'settings']
@@ -357,7 +358,8 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
 
   return (
     <Layout nav={nav} onNavChange={handleNavChange} onLogout={logout} userPhoto={user.photoURL || undefined} needsApiSetup={!apiCtx.hasOwnGroqKey && !apiCtx.hasOwnApifyKey && firstRun}>
-      {nav.tab === 'dashboard' && <DashboardView reels={reels} collections={collections} onReelClick={navigateToReel} onFilterNavigate={navigateToLibraryFiltered} needsOnboarding={firstRun && reels.length === 0} onGoToIngest={() => handleNavChange({ tab: 'ingest' })} />}
+      <ErrorBoundary>
+      {nav.tab === 'dashboard' && <DashboardView reels={reels} collections={collections} onReelClick={navigateToReel} onFilterNavigate={navigateToLibraryFiltered} needsOnboarding={firstRun && reels.length === 0} onGoToIngest={() => handleNavChange({ tab: 'ingest' })} onGoToLibrary={() => handleNavChange({ tab: 'library' })} />}
       {reelsLoading && nav.tab === 'library' && (
         <div className="flex items-center justify-center h-full">
           <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -421,10 +423,11 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
         <DataSources reels={reels} apifyApiKey={apiCtx.apifyApiKey} groqApiKey={apiCtx.apiKey} onReelClick={navigateToReel} />
       )}
       {nav.tab === 'settings' && <Settings userId={user.uid} />}
+      </ErrorBoundary>
       {batch.progress.isRunning && (
         <BatchProgressDialog
           progress={batch.progress}
-          title={batch.progress.jobs.some(j => j.status === 'processing' && true) ? 'Processing...' : 'Batch Processing'}
+          title={batch.progress.jobs.some(j => j.status === 'processing') ? 'Processing...' : 'Batch Processing'}
           onClose={batch.reset}
           onCancel={batch.cancel}
           onPause={batch.pause}

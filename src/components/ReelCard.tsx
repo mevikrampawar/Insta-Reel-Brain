@@ -29,7 +29,7 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
   const [showCollections, setShowCollections] = useState(false)
   const [summaryExpanded, setSummaryExpanded] = useState(false)
   const [expandedComments, setExpandedComments] = useState<Set<number>>(new Set())
-  const { notes, addNote, updateNote, deleteNote } = useNotes(userId, reel.id)
+  const { notes, loading: notesLoading, addNote, updateNote, deleteNote } = useNotes(userId, reel.id)
 
   // Failed state
   if (reel.ingestStatus === 'failed') {
@@ -253,7 +253,7 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
       {/* === NOTES === */}
       {showNotes && (
         <div className="border-t border-zinc-800 px-4 py-3">
-          <Notes notes={notes} reelTitle={reel.title} onAdd={(data) => addNote({ ...data, reelId: reel.id })} onUpdate={updateNote} onDelete={deleteNote} />
+          <Notes notes={notes} reelTitle={reel.title} onAdd={(data) => addNote({ ...data, reelId: reel.id })} onUpdate={updateNote} onDelete={deleteNote} loading={notesLoading} />
         </div>
       )}
 

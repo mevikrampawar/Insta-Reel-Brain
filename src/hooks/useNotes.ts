@@ -5,9 +5,11 @@ import type { ReelNote } from '../types'
 
 export function useNotes(userId: string | undefined, reelId?: string) {
   const [notes, setNotes] = useState<ReelNote[]>([])
+  const [loading, setLoading] = useState(true)
 
   const fetchNotes = useCallback(async () => {
-    if (!userId) { setNotes([]); return }
+    if (!userId) { setNotes([]); setLoading(false); return }
+    setLoading(true)
     try {
       let q
       if (reelId) {
@@ -21,6 +23,8 @@ export function useNotes(userId: string | undefined, reelId?: string) {
       setNotes(fetched)
     } catch (e) {
       console.error('Failed to fetch notes:', e)
+    } finally {
+      setLoading(false)
     }
   }, [userId, reelId])
 
@@ -62,5 +66,5 @@ export function useNotes(userId: string | undefined, reelId?: string) {
     }
   }, [userId, fetchNotes])
 
-  return { notes, addNote, updateNote, deleteNote }
+  return { notes, loading, addNote, updateNote, deleteNote }
 }

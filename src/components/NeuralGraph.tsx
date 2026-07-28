@@ -1,11 +1,13 @@
 import { useMemo, useCallback, useRef, useEffect, useState } from 'react'
 import ForceGraph3D from 'react-force-graph-3d'
-import { Network, RotateCcw } from 'lucide-react'
+import { Network, RotateCcw, Info, X } from 'lucide-react'
 import * as THREE from 'three'
 import { CATEGORY_COLORS, getCategoryColor } from '../utils/constants'
 import type { Reel } from '../types'
 
 interface Props { reels: Reel[]; onReelClick?: (reelId: string) => void }
+
+const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1
 
 function makeTextSprite(text: string, opts: { fontSize?: number; color?: string; bgColor?: string; padding?: number } = {}): THREE.Sprite {
   const fontSize = opts.fontSize || 48
@@ -18,24 +20,23 @@ function makeTextSprite(text: string, opts: { fontSize?: number; color?: string;
   ctx.font = `bold ${fontSize}px Inter, system-ui, sans-serif`
   const textWidth = ctx.measureText(text).width
 
-  canvas.width = (textWidth + padding * 2) * 2
-  canvas.height = fontSize * 2.5
+  canvas.width = (textWidth + padding * 2) * dpr
+  canvas.height = fontSize * 2.5 * dpr
+  ctx.scale(dpr, dpr)
 
-  // Background
   if (bgColor !== 'rgba(0,0,0,0)') {
     ctx.fillStyle = bgColor
     const r = 8
     ctx.beginPath()
-    ctx.roundRect(0, 0, canvas.width, canvas.height, r)
+    ctx.roundRect(0, 0, canvas.width / dpr, canvas.height / dpr, r)
     ctx.fill()
   }
 
-  // Text
   ctx.font = `bold ${fontSize}px Inter, system-ui, sans-serif`
   ctx.fillStyle = color
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText(text, canvas.width / 2, canvas.height / 2)
+  ctx.fillText(text, canvas.width / dpr / 2, canvas.height / dpr / 2)
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.minFilter = THREE.LinearFilter
@@ -49,17 +50,12 @@ function makeTextSprite(text: string, opts: { fontSize?: number; color?: string;
 
 function createCategoryObject(label: string, color: string, radius: number): THREE.Group {
   const group = new THREE.Group()
-
-  // Sphere
-  const geo = new THREE.SphereGeometry(radius, 16, 16)
+  const geo = new THREE.SphereGeometry(radius, 12, 12)
   const mat = new THREE.MeshPhongMaterial({ color, transparent: true, opacity: 0.85 })
   group.add(new THREE.Mesh(geo, mat))
-
-  // Text label above
   const sprite = makeTextSprite(label, { fontSize: 40, color: '#e4e4e7' })
   sprite.position.y = radius + 4
   group.add(sprite)
-
   return group
 }
 
@@ -86,13 +82,19 @@ interface GraphLink {
 
 export function NeuralGraph({ reels, onReelClick }: Props) {
   const fgRef = useRef<any>(null)
-  const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight })
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
+  const [legendOpen, setLegendOpen] = useState(false)
   const completeReels = useMemo(() => reels.filter(r => r.ingestStatus === 'complete'), [reels])
 
   useEffect(() => {
-    const onResize = () => setDimensions({ width: window.innerWidth, height: window.innerHeight })
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    if (!containerRef.current) return
+    const obs = new ResizeObserver(entries => {
+      const { width, height } = entries[0].contentRect
+      setDimensions(prev => (prev.width === width && prev.height === height) ? prev : { width, height })
+    })
+    obs.observe(containerRef.current)
+    return () => obs.disconnect()
   }, [])
 
   const { nodes, links, graphStats } = useMemo(() => {
@@ -103,7 +105,6 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     const graphLinks: GraphLink[] = []
     const addedCategories = new Set<string>()
 
-    // Root node
     graphNodes.push({
       id: 'root',
       name: 'Reel Brain',
@@ -133,7 +134,6 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
         categoryPath: path,
       })
 
-      // Link to parent
       const parentKey = depth === 1 ? 'root' : path.slice(0, -1).join('>')
       if (depth > 1) ensureCategoryNode(path.slice(0, -1))
       graphLinks.push({ source: parentKey, target: key })
@@ -141,24 +141,20 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
       return key
     }
 
-    // Process each reel
     for (const reel of completeReels) {
       const path = reel.categoryPath?.length
         ? reel.categoryPath
         : [reel.primaryCategory || 'Other', 'Uncategorized']
 
-      // Ensure all category ancestors exist
       for (let i = 1; i <= path.length; i++) {
         ensureCategoryNode(path.slice(0, i))
       }
 
-      // Count reels in each category level
       for (let i = 0; i < path.length; i++) {
         const catKey = path.slice(0, i + 1).join('>')
         categoryReelCount.set(catKey, (categoryReelCount.get(catKey) || 0) + 1)
       }
 
-      // Create reel node
       const reelNodeId = `reel-${reel.id}`
       const baseColor = getCategoryColor(path[0])
       graphNodes.push({
@@ -173,11 +169,9 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
         tags: (reel.suggestedTags || []).slice(0, 3).join(', '),
       })
 
-      // Link reel to its leaf category
       graphLinks.push({ source: path.join('>'), target: reelNodeId })
     }
 
-    // Update category node sizes based on reel count
     for (const node of graphNodes) {
       if (node.type === 'category') {
         const count = categoryReelCount.get(node.id) || 0
@@ -196,6 +190,8 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
       },
     }
   }, [completeReels])
+
+  const graphData = useMemo(() => ({ nodes, links }), [nodes, links])
 
   const handleNodeClick = useCallback((node: GraphNode) => {
     if (node.type === 'reel' && node.reelId && onReelClick) {
@@ -223,8 +219,13 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
   const handleRecalibrate = useCallback(() => {
     const fg = fgRef.current
     if (!fg) return
-    fg.cameraPosition({ x: 0, y: 200, z: 500 }, { x: 0, y: 0, z: 0 }, 1500)
-  }, [])
+    const isMobile = dimensions.width < 640
+    fg.cameraPosition(
+      { x: 0, y: isMobile ? 150 : 200, z: isMobile ? 350 : 500 },
+      { x: 0, y: 0, z: 0 },
+      1500,
+    )
+  }, [dimensions.width])
 
   useEffect(() => {
     const fg = fgRef.current
@@ -242,9 +243,12 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     const center = fg.d3Force('center')
     if (center) center.strength(0.05)
 
-    // Initial camera
-    fg.cameraPosition({ x: 0, y: 200, z: 500 }, { x: 0, y: 0, z: 0 })
-  }, [nodes, links])
+    const isMobile = dimensions.width < 640
+    fg.cameraPosition(
+      { x: 0, y: isMobile ? 150 : 200, z: isMobile ? 350 : 500 },
+      { x: 0, y: 0, z: 0 },
+    )
+  }, [nodes, links, dimensions.width])
 
   if (completeReels.length === 0) {
     return (
@@ -258,91 +262,110 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     )
   }
 
-  return (
-    <div className="relative w-full h-full">
-      <ForceGraph3D
-        ref={fgRef}
-        graphData={{ nodes, links }}
-        width={dimensions.width}
-        height={dimensions.height}
-        nodeId="id"
-        linkSource="source"
-        linkTarget="target"
-        nodeVal="val"
-        nodeColor="color"
-        nodeLabel={(node: GraphNode) => {
-          if (node.type === 'root') {
-            return `<div style="background:#18181b;color:#818cf8;padding:8px 14px;border-radius:8px;font-size:14px;font-weight:700;border:1px solid #4f46e5;text-align:center;">
-              Reel Brain
-            </div>`
-          }
-          if (node.type === 'category') {
-            const cat = node.categoryPath?.[0] || 'Other'
-            return `<div style="background:#18181b;color:#e4e4e7;padding:6px 10px;border-radius:6px;font-size:12px;max-width:220px;border:1px solid #27272a;">
-              <div style="font-weight:600;margin-bottom:2px;color:${getCategoryColor(cat)}">${node.name}</div>
-              <div style="color:#a1a1aa;font-size:10px;">${node.categoryPath?.join(' → ') || ''}</div>
-            </div>`
-          }
-          return `<div style="background:#18181b;color:#e4e4e7;padding:6px 10px;border-radius:6px;font-size:12px;max-width:220px;border:1px solid #27272a;">
-            <div style="font-weight:600;margin-bottom:3px;">${node.name}</div>
-            <div style="color:#a1a1aa;font-size:11px;">@${node.creator || 'unknown'}</div>
-            ${node.tags ? `<div style="color:#818cf8;font-size:10px;margin-top:3px;">${node.tags}</div>` : ''}
-          </div>`
-        }}
-        nodeThreeObject={handleNodeThreeObject as any}
-        nodeThreeObjectExtend={false}
-        nodeOpacity={1}
-        nodeResolution={16}
-        linkColor={() => 'rgba(129, 140, 248, 0.35)'}
-        linkWidth={0.8}
-        linkOpacity={0.5}
-        linkCurvature={0.1}
-        backgroundColor="#09090b"
-        showNavInfo={false}
-        cooldownTime={25000}
-        warmupTicks={100}
-        onNodeClick={handleNodeClick}
-        enablePointerInteraction={true}
-        d3VelocityDecay={0.4}
-      />
+  const isMobile = dimensions.width < 640
 
-      {/* Recalibrate button */}
+  return (
+    <div ref={containerRef} className="relative w-full h-full">
+      {dimensions.width > 0 && (
+        <ForceGraph3D
+          ref={fgRef}
+          graphData={graphData}
+          width={dimensions.width}
+          height={dimensions.height}
+          nodeId="id"
+          linkSource="source"
+          linkTarget="target"
+          nodeVal="val"
+          nodeColor="color"
+          nodeLabel={(node: GraphNode) => {
+            if (node.type === 'root') {
+              return `<div style="background:#18181b;color:#818cf8;padding:8px 14px;border-radius:8px;font-size:14px;font-weight:700;border:1px solid #4f46e5;text-align:center;">
+                Reel Brain
+              </div>`
+            }
+            if (node.type === 'category') {
+              const cat = node.categoryPath?.[0] || 'Other'
+              return `<div style="background:#18181b;color:#e4e4e7;padding:6px 10px;border-radius:6px;font-size:12px;max-width:220px;border:1px solid #27272a;">
+                <div style="font-weight:600;margin-bottom:2px;color:${getCategoryColor(cat)}">${node.name}</div>
+                <div style="color:#a1a1aa;font-size:10px;">${node.categoryPath?.join(' → ') || ''}</div>
+              </div>`
+            }
+            return `<div style="background:#18181b;color:#e4e4e7;padding:6px 10px;border-radius:6px;font-size:12px;max-width:220px;border:1px solid #27272a;">
+              <div style="font-weight:600;margin-bottom:3px;">${node.name}</div>
+              <div style="color:#a1a1aa;font-size:11px;">@${node.creator || 'unknown'}</div>
+              ${node.tags ? `<div style="color:#818cf8;font-size:10px;margin-top:3px;">${node.tags}</div>` : ''}
+            </div>`
+          }}
+          nodeThreeObject={handleNodeThreeObject as any}
+          nodeThreeObjectExtend={false}
+          nodeOpacity={1}
+          nodeResolution={12}
+          linkColor={() => 'rgba(129, 140, 248, 0.35)'}
+          linkWidth={0.8}
+          linkOpacity={0.5}
+          linkCurvature={0.1}
+          backgroundColor="#09090b"
+          showNavInfo={false}
+          cooldownTime={12000}
+          warmupTicks={50}
+          onNodeClick={handleNodeClick}
+          enablePointerInteraction={true}
+          d3VelocityDecay={0.4}
+        />
+      )}
+
+      {/* Recalibrate */}
       <button
         onClick={handleRecalibrate}
-        className="absolute top-3 right-3 bg-zinc-900/90 border border-zinc-700 hover:border-indigo-500 rounded-lg px-3 py-2 text-[11px] text-zinc-400 hover:text-indigo-400 flex items-center gap-1.5 transition-colors cursor-pointer"
-        title="Reset camera to default view"
+        className="absolute top-3 right-3 bg-zinc-900/90 border border-zinc-700 hover:border-indigo-500 rounded-lg px-3 py-2 text-[11px] text-zinc-400 hover:text-indigo-400 flex items-center gap-1.5 transition-colors cursor-pointer z-10"
+        title="Reset camera"
       >
         <RotateCcw size={12} />
-        Recalibrate
+        {!isMobile && 'Recalibrate'}
       </button>
 
       {/* Instructions */}
-      <div className="absolute top-3 left-3 bg-zinc-900/90 border border-zinc-800 rounded-lg px-3 py-2 text-[10px] text-zinc-500 space-y-0.5 pointer-events-none">
-        <p>Scroll to zoom · Drag to pan · Drag nodes to rearrange</p>
-        <p className="text-indigo-400">Click a reel to view in Library</p>
+      <div className="absolute top-3 left-3 bg-zinc-900/90 border border-zinc-800 rounded-lg px-3 py-2 text-[10px] text-zinc-500 space-y-0.5 pointer-events-none z-10 max-w-[200px] sm:max-w-none">
+        <p>{isMobile ? 'Pinch to zoom · Drag to pan' : 'Scroll to zoom · Drag to pan · Drag nodes to rearrange'}</p>
+        <p className="text-indigo-400">{isMobile ? 'Tap a reel to view' : 'Click a reel to view in Library'}</p>
       </div>
 
+      {/* Mobile legend toggle */}
+      {isMobile && (
+        <button
+          onClick={() => setLegendOpen(v => !v)}
+          className="absolute bottom-4 left-3 bg-zinc-900/90 border border-zinc-700 hover:border-indigo-500 rounded-lg p-2 text-zinc-400 hover:text-indigo-400 transition-colors z-10"
+        >
+          {legendOpen ? <X size={14} /> : <Info size={14} />}
+        </button>
+      )}
+
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-zinc-900/90 border border-zinc-800 rounded-lg p-3 text-xs space-y-1 hidden sm:block max-h-[50vh] overflow-y-auto">
+      <div className={`${isMobile
+        ? `absolute bottom-14 left-3 bg-zinc-900/95 border border-zinc-700 rounded-lg p-3 text-xs space-y-1 max-h-[40vh] overflow-y-auto z-10 transition-all ${legendOpen ? 'block' : 'hidden'}`
+        : 'absolute bottom-4 left-4 bg-zinc-900/90 border border-zinc-800 rounded-lg p-3 text-xs space-y-1 max-h-[50vh] overflow-y-auto'
+      }`}>
         <p className="font-medium text-zinc-300 mb-1">Categories</p>
         {Object.entries(CATEGORY_COLORS).filter(([k]) => k !== 'Other').map(([cat, color]) => (
           <div key={cat} className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full" style={{ background: color }} />
+            <span className="w-3 h-3 rounded-full shrink-0" style={{ background: color }} />
             <span className="text-zinc-400 text-[11px]">{cat}</span>
           </div>
         ))}
         <div className="mt-2 pt-2 border-t border-zinc-800 space-y-0.5">
           <p className="text-[10px] text-zinc-500">Larger nodes = more reels</p>
           <p className="text-[10px] text-zinc-500">Center = Reel Brain root</p>
-          <p className="text-[10px] text-zinc-500">Threads = relationships</p>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="absolute bottom-4 right-4 bg-zinc-900/90 border border-zinc-800 rounded-lg px-3 py-2 text-[10px] text-zinc-500 pointer-events-none hidden sm:block">
+      <div className={`${isMobile
+        ? 'absolute bottom-4 right-14 bg-zinc-900/90 border border-zinc-800 rounded-lg px-2 py-1.5 text-[9px] text-zinc-500 pointer-events-none z-10'
+        : 'absolute bottom-4 right-4 bg-zinc-900/90 border border-zinc-800 rounded-lg px-3 py-2 text-[10px] text-zinc-500 pointer-events-none'
+      }`}>
         <div className="flex items-center gap-1.5">
-          <Network size={10} className="text-indigo-400" />
-          {graphStats.nodes} reels · {graphStats.categories} categories · {graphStats.edges} links
+          <Network size={isMobile ? 8 : 10} className="text-indigo-400" />
+          {graphStats.nodes} reels · {graphStats.categories} cats · {graphStats.edges} links
         </div>
       </div>
     </div>

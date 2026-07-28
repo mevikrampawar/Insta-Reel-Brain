@@ -18,6 +18,7 @@ interface Props {
   onFilterNavigate: (filters: { categories?: string[]; creator?: string }, highlightReelId?: string) => void
   needsOnboarding?: boolean
   onGoToIngest?: () => void
+  onGoToLibrary?: () => void
 }
 
 const container = {
@@ -46,7 +47,7 @@ function getCategoryGradient(category: string): string {
   return categoryGradients[category] || categoryGradients['other']
 }
 
-export function DashboardView({ reels, collections, onReelClick, onFilterNavigate, needsOnboarding, onGoToIngest }: Props) {
+export function DashboardView({ reels, collections, onReelClick, onFilterNavigate, needsOnboarding, onGoToIngest, onGoToLibrary }: Props) {
   const completeReels = useMemo(() => reels.filter(r => r.ingestStatus === 'complete'), [reels])
 
   const stats = useMemo(() => {
@@ -155,7 +156,7 @@ export function DashboardView({ reels, collections, onReelClick, onFilterNavigat
           <Button onClick={onGoToIngest} className="gap-2">
             <Plus size={16} /> Add Reel
           </Button>
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2" onClick={onGoToLibrary}>
             <Search size={16} /> Search Library
           </Button>
         </motion.div>

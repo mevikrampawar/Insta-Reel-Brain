@@ -20,25 +20,32 @@ async function callGroq(
   }
 
   return withRetry(async () => {
-    const res = await fetch(`${BASE}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: opts?.model || 'llama-3.3-70b-versatile',
-        messages,
-        temperature: opts?.temperature ?? 0.3,
-        max_tokens: opts?.max_tokens ?? 2048,
-      }),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(`Groq API error ${res.status}: ${err.error?.message || res.statusText}`)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 60000)
+    try {
+      const res = await fetch(`${BASE}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: opts?.model || 'llama-3.3-70b-versatile',
+          messages,
+          temperature: opts?.temperature ?? 0.3,
+          max_tokens: opts?.max_tokens ?? 2048,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(`Groq API error ${res.status}: ${err.error?.message || res.statusText}`)
+      }
+      const data = await res.json()
+      return data.choices?.[0]?.message?.content || ''
+    } finally {
+      clearTimeout(timeout)
     }
-    const data = await res.json()
-    return data.choices?.[0]?.message?.content || ''
   }, { maxRetries: 2, baseDelayMs: 1500 })
 }
 
@@ -52,6 +59,23 @@ function parseJsonFromLLMResponse<T>(raw: string, fallback: T): T {
     }
     return fallback
   }
+}
+
+function validateAnalysis(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...raw }
+  if (typeof out.summary !== 'string') out.summary = ''
+  for (const key of ['keyTakeaways', 'suggestedTags', 'actionItems']) {
+    if (!Array.isArray(out[key])) out[key] = []
+  }
+  if (!Array.isArray(out.concepts)) out.concepts = []
+  else out.concepts = out.concepts.filter((c: unknown) => c && typeof c === 'object' && typeof (c as Record<string, unknown>).name === 'string')
+  if (!Array.isArray(out.entities)) out.entities = []
+  else out.entities = out.entities.filter((e: unknown) => e && typeof e === 'object' && typeof (e as Record<string, unknown>).name === 'string')
+  if (typeof out.language !== 'string') out.language = 'en'
+  if (typeof out.contentCategory !== 'string') out.contentCategory = 'other'
+  if (typeof out.sentiment !== 'string') out.sentiment = 'neutral'
+  if (typeof out.targetAudience !== 'string') out.targetAudience = ''
+  return out
 }
 
 export async function analyzeReel(
@@ -132,7 +156,7 @@ Respond with ONLY this JSON:
     targetAudience: '',
   }
 
-  return parseJsonFromLLMResponse(raw, fallback)
+  return validateAnalysis(parseJsonFromLLMResponse(raw, fallback)) as ReturnType<typeof analyzeReel> extends Promise<infer R> ? R : never
 }
 
 export async function chatWithLibrary(

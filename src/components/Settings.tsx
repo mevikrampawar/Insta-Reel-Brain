@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { Settings as SettingsIcon, Save, Check, ExternalLink, Trash2, Bot, Zap, Loader2, XCircle, Sparkles, Eye, EyeOff, AlertTriangle } from 'lucide-react'
+import { Settings as SettingsIcon, Save, Check, ExternalLink, Trash2, Bot, Zap, Loader2, XCircle, Sparkles, Eye, EyeOff, AlertTriangle, Smartphone, Download, Copy, ChevronDown } from 'lucide-react'
 import { db, auth } from '../services/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { GoogleAuthProvider, reauthenticateWithPopup } from 'firebase/auth'
@@ -35,6 +35,12 @@ export function Settings({ userId }: Props) {
   const [dangerStep, setDangerStep] = useState<'confirm' | 'reauth' | 'type-delete' | 'deleting' | 'done'>('confirm')
   const [deleteInput, setDeleteInput] = useState('')
   const [deleteError, setDeleteError] = useState('')
+  const [copiedUid, setCopiedUid] = useState(false)
+  const [copiedShortcutUrl, setCopiedShortcutUrl] = useState(false)
+  const [copiedRelayJson, setCopiedRelayJson] = useState(false)
+  const [iosShortcutOpen, setIosShortcutOpen] = useState(false)
+  const [bgRelayOpen, setBgRelayOpen] = useState(false)
+  const [pwaOpen, setPwaOpen] = useState(false)
   const mounted = useRef(true)
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
@@ -167,6 +173,14 @@ export function Settings({ userId }: Props) {
     setDangerStep('confirm')
     setDeleteInput('')
     setDeleteError('')
+  }, [])
+
+  const copyToClipboard = useCallback(async (text: string, setCopied: (v: boolean) => void) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* ignore */ }
   }, [])
 
   if (loading) return <div className="p-8 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-indigo-500" /></div>
@@ -320,6 +334,149 @@ export function Settings({ userId }: Props) {
             Add your own keys for unlimited use — both are free to get.
           </p>
         </CardContent>
+      </Card>
+
+      {/* ── Setup Guides ───────────────────────────────── */}
+      <Separator />
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold">Setup Guides</h2>
+        <p className="text-xs text-zinc-500">Configure how you add reels to your library</p>
+      </div>
+
+      {/* iOS Shortcut (Deep Link) */}
+      <Card className="overflow-hidden">
+        <button
+          onClick={() => setIosShortcutOpen(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm text-zinc-300 hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+              <Smartphone size={16} className="text-indigo-400" />
+            </div>
+            <div className="text-left">
+              <p className="font-medium">iOS Shortcut (Recommended)</p>
+              <p className="text-[10px] text-zinc-500">Share reels from Instagram directly into Reel Brain</p>
+            </div>
+          </div>
+          <ChevronDown size={14} className={`text-zinc-500 transition-transform ${iosShortcutOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {iosShortcutOpen && (
+          <div className="px-4 pb-4 space-y-3 border-t border-white/5 pt-3">
+            <ol className="text-[11px] text-zinc-400 space-y-1.5 list-decimal list-inside">
+              <li>Open the <strong className="text-zinc-300">Shortcuts</strong> app on your iPhone (pre-installed)</li>
+              <li>Tap <strong className="text-zinc-300">+</strong> → <strong className="text-zinc-300">Add Action</strong> → search "Receive input" → select <strong className="text-zinc-300">Receive Input from Share Sheet</strong></li>
+              <li>Tap <strong className="text-zinc-300">Add Action</strong> → search "Open URLs" → tap it</li>
+              <li>Tap <strong className="text-zinc-300">URL</strong> → delete the default → paste this:</li>
+            </ol>
+            <div className="flex items-center gap-1.5">
+              <code className="flex-1 text-[10px] text-amber-300 bg-zinc-900 rounded px-2 py-1.5 truncate font-mono">
+                https://mevikrampawar.github.io/Insta-Reel-Brain/?url=[Shortcut Input]
+              </code>
+              <button
+                onClick={() => copyToClipboard('https://mevikrampawar.github.io/Insta-Reel-Brain/?url=[Shortcut Input]', setCopiedShortcutUrl)}
+                className="min-w-[32px] min-h-[32px] flex items-center justify-center px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg transition-colors shrink-0"
+                title="Copy URL template"
+              >
+                {copiedShortcutUrl ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} className="text-amber-300" />}
+              </button>
+            </div>
+            <ol className="text-[11px] text-zinc-400 space-y-1.5 list-decimal list-inside" start={5}>
+              <li>Tap the shortcut name → rename it <strong className="text-zinc-300">"Add to Reel Brain"</strong> → Done</li>
+            </ol>
+            <p className="text-[10px] text-zinc-500">Use it: Instagram → Share → tap "Add to Reel Brain". The app opens and processes the reel automatically.</p>
+          </div>
+        )}
+      </Card>
+
+      {/* iOS Background Relay (Cloudflare Worker) */}
+      <Card className="overflow-hidden">
+        <button
+          onClick={() => setBgRelayOpen(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm text-zinc-300 hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+              <Zap size={16} className="text-purple-400" />
+            </div>
+            <div className="text-left">
+              <p className="font-medium">iOS Background Relay</p>
+              <p className="text-[10px] text-zinc-500">Save reels without leaving Instagram (advanced, requires Cloudflare Worker)</p>
+            </div>
+          </div>
+          <ChevronDown size={14} className={`text-zinc-500 transition-transform ${bgRelayOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {bgRelayOpen && (
+          <div className="px-4 pb-4 space-y-3 border-t border-white/5 pt-3">
+            <p className="text-[11px] text-zinc-400">
+              This sends reel URLs to a Cloudflare Worker in the background — no browser opens, no scrolling interrupted.
+              Requires a one-time Cloudflare Worker setup (see <a href="https://github.com/mevikrampawar/Insta-Reel-Brain/tree/main/worker" target="_blank" rel="noopener" className="text-indigo-400 hover:text-indigo-300">worker README</a>).
+            </p>
+            <div className="bg-zinc-800/50 rounded-lg p-3 space-y-2">
+              <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">Your User ID</p>
+              <p className="text-[10px] text-zinc-500">Paste this into your iOS Shortcut's <code className="text-zinc-400">userId</code> field:</p>
+              <div className="flex items-center gap-1.5">
+                <code className="flex-1 text-[10px] text-amber-300 bg-zinc-900 rounded px-2 py-1.5 font-mono truncate">{userId}</code>
+                <button
+                  onClick={() => copyToClipboard(userId, setCopiedUid)}
+                  className="min-w-[32px] min-h-[32px] flex items-center justify-center px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg transition-colors shrink-0"
+                  title="Copy User ID"
+                >
+                  {copiedUid ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} className="text-amber-300" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-zinc-500 mt-1">Your shortcut JSON body should look like:</p>
+              <div className="flex items-center gap-1.5">
+                <code className="flex-1 text-[9px] text-zinc-400 bg-zinc-900 rounded px-2 py-1.5 font-mono break-all">
+                  {`{"url": "[Shortcut Input]", "userId": "${userId}"}`}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(`{"url": "[Shortcut Input]", "userId": "${userId}"}`, setCopiedRelayJson)}
+                  className="min-w-[32px] min-h-[32px] flex items-center justify-center px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg transition-colors shrink-0"
+                  title="Copy JSON body"
+                >
+                  {copiedRelayJson ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} className="text-amber-300" />}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* PWA Installation */}
+      <Card className="overflow-hidden">
+        <button
+          onClick={() => setPwaOpen(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm text-zinc-300 hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <Download size={16} className="text-emerald-400" />
+            </div>
+            <div className="text-left">
+              <p className="font-medium">Install as App (PWA)</p>
+              <p className="text-[10px] text-zinc-500">Add to home screen for a native app experience</p>
+            </div>
+          </div>
+          <ChevronDown size={14} className={`text-zinc-500 transition-transform ${pwaOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {pwaOpen && (
+          <div className="px-4 pb-4 space-y-3 border-t border-white/5 pt-3">
+            <div className="space-y-2">
+              <p className="text-[11px] text-zinc-300 font-medium">Android / Chrome</p>
+              <ol className="text-[11px] text-zinc-400 space-y-1 list-decimal list-inside">
+                <li>Open <a href="https://mevikrampawar.github.io/Insta-Reel-Brain/" target="_blank" rel="noopener" className="text-indigo-400 hover:text-indigo-300">Reel Brain</a> in Chrome</li>
+                <li>Tap the <strong className="text-zinc-300">Install</strong> prompt (or Chrome menu → Install app)</li>
+                <li>From Instagram: Share → Reel Brain appears in the share sheet</li>
+              </ol>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[11px] text-zinc-300 font-medium">Clipboard Detection</p>
+              <p className="text-[11px] text-zinc-400">
+                When you open the app, it checks your clipboard for Instagram URLs. If found, a banner appears — tap "Add it" to ingest instantly. Works on iOS 16+ and all desktop browsers.
+              </p>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Danger zone */}

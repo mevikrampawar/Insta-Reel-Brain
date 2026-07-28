@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
-import { Link, AlertCircle, CheckCircle2, Video, XCircle, RotateCw, ArrowRight, Clipboard, Settings, ExternalLink, Smartphone, Loader2, Copy, Check } from 'lucide-react'
+import { Link, AlertCircle, CheckCircle2, Video, XCircle, RotateCw, ArrowRight, Clipboard, Settings, Smartphone, Loader2 } from 'lucide-react'
 import type { ScrapeJob, JobPhase } from '../hooks/useScrapeQueue'
 
 interface Props {
@@ -57,7 +57,6 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apiKeyLoading, 
   const [url, setUrl] = useState('')
   const [duplicateMsg, setDuplicateMsg] = useState<string | null>(null)
   const [tipsOpen, setTipsOpen] = useState(false)
-  const [shortcutCopied, setShortcutCopied] = useState(false)
   const hasApify = !!apifyApiKey.trim()
   const freeRemaining = Math.max(0, masterUsageLimit - masterUsageCount)
   const limitReached = needsMasterApify && !hasOwnApifyKey && !canUseMasterKey
@@ -256,41 +255,17 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apiKeyLoading, 
                   <p className="text-xs text-zinc-300"><span className="font-medium">Any device:</span> Paste an Instagram reel URL in the box above</p>
                 </div>
               </div>
-              <div className="flex items-start gap-2.5">
-                <ExternalLink size={14} className="text-amber-400 shrink-0 mt-0.5" />
-                <div className="space-y-2">
-                  <p className="text-xs text-zinc-300"><span className="font-medium">iOS Shortcut:</span> Share reels directly from Instagram — set up once, use forever</p>
-                  <div className="bg-zinc-800/50 rounded-lg p-2.5 space-y-1.5">
-                    <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">Setup (2 minutes)</p>
-                    <ol className="text-[11px] text-zinc-400 space-y-1 list-decimal list-inside">
-                      <li>Open the <strong className="text-zinc-300">Shortcuts</strong> app on your iPhone</li>
-                      <li>Tap <strong className="text-zinc-300">+</strong> → <strong className="text-zinc-300">Add Action</strong> → search "Receive input" → select <strong className="text-zinc-300">Receive Input from Share Sheet</strong></li>
-                      <li>Tap <strong className="text-zinc-300">Add Action</strong> → search "Open URLs" → tap it</li>
-                      <li>Tap <strong className="text-zinc-300">URL</strong> → delete the default → paste this:</li>
-                    </ol>
-                    <div className="flex items-center gap-1.5">
-                      <code className="flex-1 text-[10px] text-amber-300 bg-zinc-900 rounded px-2 py-1.5 truncate font-mono">
-                        https://mevikrampawar.github.io/Insta-Reel-Brain/?url=[Shortcut Input]
-                      </code>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText('https://mevikrampawar.github.io/Insta-Reel-Brain/?url=[Shortcut Input]')
-                          setShortcutCopied(true)
-                          setTimeout(() => setShortcutCopied(false), 2000)
-                        }}
-                        className="min-w-[32px] min-h-[32px] flex items-center justify-center px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg transition-colors shrink-0"
-                        title="Copy URL template"
-                      >
-                        {shortcutCopied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} className="text-amber-300" />}
-                      </button>
-                    </div>
-                    <ol className="text-[11px] text-zinc-400 space-y-1 list-decimal list-inside" start={5}>
-                      <li>Tap the shortcut name → rename it <strong className="text-zinc-300">"Add to Reel Brain"</strong> → Done</li>
-                    </ol>
+              {onGoToSettings && (
+                <div className="flex items-start gap-2.5">
+                  <Settings size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-zinc-300"><span className="font-medium">iOS Shortcut & PWA:</span> Set up one-tap sharing from Instagram</p>
+                    <button onClick={onGoToSettings} className="text-[10px] text-indigo-400 hover:text-indigo-300 mt-0.5 transition-colors">
+                      Open Setup Guides →
+                    </button>
                   </div>
-                  <p className="text-[10px] text-zinc-500">Use it: Instagram → Share → tap "Add to Reel Brain"</p>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </Card>
