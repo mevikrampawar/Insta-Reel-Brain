@@ -1,7 +1,7 @@
 // Cloudflare Worker: background relay for iOS Shortcut
 // Receives reel URLs and writes them to Firestore without opening a browser
 //
-// SETUP: (v2)
+// SETUP: (v3)
 // 1. Create a Firebase service account (Project Settings > Service Accounts > Generate New Private Key)
 // 2. In Cloudflare dashboard: Workers & Pages > Create Application > Paste this script
 // 3. Add secrets: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
