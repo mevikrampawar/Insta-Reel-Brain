@@ -1,7 +1,7 @@
-import { useMemo, useCallback, useRef, useEffect, useState } from 'react'
+import { useMemo, useCallback, useRef, useEffect, useLayoutEffect, useState } from 'react'
 import ForceGraph2D from 'react-force-graph-2d'
-import { Network, RotateCcw, Info, X, Search, ZoomIn } from 'lucide-react'
-import { buildBrainNetwork, BRAIN_NODE_COLORS, type BrainNode, type BrainLink } from '../utils/brainNetwork'
+import { Network, RotateCcw, Info, X, Search, ZoomIn, ExternalLink, Tags, BookOpen, Users } from 'lucide-react'
+import { buildBrainNetwork, BRAIN_NODE_COLORS, BRAIN_LINK_KINDS, type BrainNode, type BrainLink } from '../utils/brainNetwork'
 import { CATEGORY_COLORS, getCategoryColor } from '../utils/constants'
 import type { Reel } from '../types'
 
@@ -26,30 +26,63 @@ function truncateLabel(ctx: CanvasRenderingContext2D, text: string, maxWidth: nu
   return t + '…'
 }
 
+interface ReelDetail {
+  kind: 'reel'
+  reel: Reel
+  concepts: { name: string; weight: number }[]
+  entities: string[]
+  creator?: string
+  similar: { reelId: string; title: string; score: number }[]
+  bridges: string[]
+}
+
+interface NodeDetail {
+  kind: 'node'
+  node: BrainNode
+  reels: Reel[]
+}
+
+type SelectedDetail = ReelDetail | NodeDetail | null
+
 export function NeuralGraph({ reels, onReelClick }: Props) {
   const fgRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const didFit = useRef(false)
-  const prevQuery = useRef('')
   const lastClick = useRef<{ id: string; at: number } | null>(null)
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
   const [legendOpen, setLegendOpen] = useState(false)
   const [showHint, setShowHint] = useState(true)
   const [hoverNodeId, setHoverNodeId] = useState<string | null>(null)
+  const [hoverLink, setHoverLink] = useState<BrainLink | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
 
   const completeReels = useMemo(() => reels.filter(r => r.ingestStatus === 'complete'), [reels])
 
-  useEffect(() => {
-    if (!containerRef.current) return
-    const obs = new ResizeObserver(entries => {
-      const { width, height } = entries[0].contentRect
-      setDimensions(prev => (prev.width === width && prev.height === height) ? prev : { width, height })
-    })
-    obs.observe(containerRef.current)
-    return () => obs.disconnect()
+  const measure = useCallback(() => {
+    const el = containerRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const width = Math.max(Math.round(rect.width), 0)
+    const height = Math.max(Math.round(rect.height), 0)
+    setDimensions(prev => (prev.width === width && prev.height === height) ? prev : { width, height })
   }, [])
+
+  useLayoutEffect(() => {
+    measure()
+  }, [measure])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const obs = new ResizeObserver(measure)
+    obs.observe(el)
+    window.addEventListener('resize', measure)
+    return () => {
+      obs.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [measure])
 
   useEffect(() => {
     const t = setTimeout(() => setShowHint(false), 5000)
@@ -116,15 +149,15 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     const prev = lastClick.current
     lastClick.current = { id: node.id, at: now }
     if (prev && prev.id === node.id && now - prev.at < 400) {
-      const fg = fgRef.current
-      if (fg) {
-        fg.centerAt(node.x, node.y, 350)
-        fg.zoom(2.6, 600)
+      if (node.type === 'reel') {
+        if (node.reelIds?.[0] && onReelClick) onReelClick(node.reelIds[0])
+      } else {
+        const fg = fgRef.current
+        if (fg) {
+          fg.centerAt(node.x, node.y, 350)
+          fg.zoom(2.6, 600)
+        }
       }
-      return
-    }
-    if (node.type === 'reel') {
-      if (node.reelIds?.[0] && onReelClick) onReelClick(node.reelIds[0])
       return
     }
     setSelectedId(prevSel => (prevSel === node.id ? null : node.id))
@@ -134,20 +167,26 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     setHoverNodeId(node?.id ?? null)
   }, [])
 
+  const handleLinkHover = useCallback((link: BrainLink | null) => {
+    setHoverLink(link)
+  }, [])
+
   const nodeLabel = useCallback((node: BrainNode) => {
-    const count = node.reelIds.length
-    if (node.type === 'reel') {
-      const creator = completeReels.find(r => r.id === node.reelIds[0])?.creatorHandle
-      const tags = completeReels.find(r => r.id === node.reelIds[0])?.suggestedTags?.slice(0, 3).join(', ')
-      return `<div style="background:#18181b;color:#e4e4e7;padding:6px 10px;border-radius:6px;font-size:12px;max-width:240px;border:1px solid #27272a;">
+    const reel = completeReels.find(r => r.id === node.reelIds[0])
+    if (node.type === 'reel' && reel) {
+      const tags = reel.suggestedTags?.slice(0, 3).join(', ')
+      return `<div style="background:#18181b;color:#e4e4e7;padding:8px 10px;border-radius:8px;font-size:12px;max-width:260px;border:1px solid #27272a;">
         <div style="font-weight:600;margin-bottom:3px;">${node.name}</div>
-        <div style="color:#a1a1aa;font-size:11px;">@${creator || 'unknown'}</div>
+        <div style="color:#a1a1aa;font-size:11px;">@${reel.creatorHandle || 'unknown'}</div>
+        ${reel.summary ? `<div style="color:#d4d4d8;font-size:11px;margin-top:3px;line-height:1.4;">${reel.summary.slice(0, 140)}${reel.summary.length > 140 ? '…' : ''}</div>` : ''}
         ${tags ? `<div style="color:#818cf8;font-size:10px;margin-top:3px;">${tags}</div>` : ''}
       </div>`
     }
+    const count = node.reelIds.length
+    const verb = node.type === 'concept' ? 'shared topic' : node.type === 'entity' ? 'mentioned in' : 'created'
     return `<div style="background:#18181b;color:#e4e4e7;padding:6px 10px;border-radius:6px;font-size:12px;max-width:240px;border:1px solid #27272a;">
       <div style="font-weight:600;margin-bottom:2px;color:${node.color}">${node.name}</div>
-      <div style="color:#a1a1aa;font-size:10px;">${node.type} · ${count} reel${count === 1 ? '' : 's'}</div>
+      <div style="color:#a1a1aa;font-size:10px;">${node.type} · ${verb} ${count} reel${count === 1 ? '' : 's'}</div>
     </div>`
   }, [completeReels])
 
@@ -155,9 +194,13 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     const x = node.x ?? 0
     const y = node.y ?? 0
     const r = nodeRadius(node)
-    const dimmed = selectedId != null && node.id !== selectedId && !connectedIds.has(node.id)
     const hovered = hoverNodeId === node.id
     const isSelected = selectedId === node.id
+    const linkedToHover = hoverLink != null && (linkId(hoverLink.source) === node.id || linkId(hoverLink.target) === node.id)
+    let dimmed = false
+    if (selectedId != null) dimmed = !connectedIds.has(node.id)
+    else if (hoverLink != null) dimmed = !linkedToHover
+
     ctx.globalAlpha = dimmed ? 0.1 : hovered ? 1 : 0.88
 
     if (node.type === 'concept') {
@@ -191,17 +234,24 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
       ctx.lineWidth = 1.5 / globalScale
       ctx.stroke()
     }
-    if (hovered && node.type !== 'concept') {
+    if (linkedToHover) {
       ctx.beginPath()
       ctx.arc(x, y, r + 2.5, 0, 2 * Math.PI)
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)'
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)'
+      ctx.lineWidth = 1.5 / globalScale
+      ctx.stroke()
+    }
+    if (hovered && node.type !== 'concept') {
+      ctx.beginPath()
+      ctx.arc(x, y, r + 2, 0, 2 * Math.PI)
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)'
       ctx.lineWidth = 1.5 / globalScale
       ctx.stroke()
     }
 
     ctx.globalAlpha = 1
 
-    const showLabel = hovered || isSelected || globalScale > 1.6
+    const showLabel = hovered || isSelected || linkedToHover || globalScale > 1.4
     if (!showLabel || dimmed) return
     const bold = node.type === 'concept' || node.type === 'creator'
     ctx.font = `${bold ? 600 : 400} ${(node.type === 'concept' ? 10 : 9) / globalScale}px Inter, system-ui, sans-serif`
@@ -210,7 +260,7 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     ctx.textBaseline = 'top'
     const label = truncateLabel(ctx, node.name, 170 / globalScale)
     ctx.fillText(label, x, y + r + 3 / globalScale)
-  }, [nodeRadius, selectedId, connectedIds, hoverNodeId])
+  }, [nodeRadius, selectedId, connectedIds, hoverNodeId, hoverLink])
 
   const handleNodePointerArea = useCallback((node: BrainNode, color: string, ctx: CanvasRenderingContext2D) => {
     const r = Math.max(nodeRadius(node) * 1.8, 7)
@@ -221,28 +271,51 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
   }, [nodeRadius])
 
   const linkColor = useCallback((link: BrainLink) => {
-    if (selectedId != null) {
-      const src = linkId(link.source)
-      const tgt = linkId(link.target)
-      if (!connectedIds.has(src) || !connectedIds.has(tgt)) return 'rgba(255,255,255,0.035)'
-    }
+    const isHoveredLink = hoverLink === link
+    const isDim = (() => {
+      if (selectedId != null) {
+        const src = linkId(link.source)
+        const tgt = linkId(link.target)
+        return !connectedIds.has(src) || !connectedIds.has(tgt)
+      }
+      if (hoverLink != null) return link !== hoverLink
+      return false
+    })()
+    if (isDim) return 'rgba(255,255,255,0.04)'
+    if (isHoveredLink) return 'rgba(255,255,255,0.9)'
     const srcColor = nodeColors.get(linkId(link.source)) || '#818cf8'
-    return hexToRgba(srcColor, link.kind === 'similarity' ? 0.35 : 0.3)
-  }, [nodeColors, selectedId, connectedIds])
+    return hexToRgba(srcColor, link.kind === 'similar' ? 0.4 : 0.32)
+  }, [nodeColors, selectedId, connectedIds, hoverLink])
 
   const linkWidth = useCallback((link: BrainLink) => {
     const v = Math.max(link.value || 0, 0.05)
-    if (link.kind === 'similarity') return 0.5 + Math.min(v, 1) * 1.4
-    if (link.kind === 'cooccurrence') return 0.6 + Math.min(v, 1) * 0.8
-    return 0.8 + Math.min(v, 1) * 1.2
+    const base = link.kind === 'similar' ? 0.5 + Math.min(v, 1) * 1.4
+      : link.kind === 'bridge' ? 0.6 + Math.min(v, 1) * 0.8
+      : 0.8 + Math.min(v, 1) * 1.2
+    return hoverLink === link ? base * 2.5 : base
+  }, [hoverLink])
+
+  const linkLabel = useCallback((link: BrainLink) => {
+    const kind = BRAIN_LINK_KINDS[link.kind]
+    const meta = link.kind === 'similar'
+      ? `${Math.round(link.value * 100)}% topic match`
+      : link.kind === 'bridge'
+        ? `${Math.round(link.value)} reels share both`
+        : link.kind === 'concept'
+          ? `concept weight ${link.value.toFixed(2)}`
+          : ''
+    return `<div style="background:#18181b;color:#e4e4e7;padding:6px 10px;border-radius:6px;font-size:11px;max-width:240px;border:1px solid #27272a;">
+      <div style="font-weight:600;margin-bottom:2px;">${link.label}</div>
+      <div style="color:#a1a1aa;font-size:10px;">${kind}${meta ? ` · ${meta}` : ''}</div>
+    </div>`
   }, [])
 
   const handleReset = useCallback(() => {
     setSelectedId(null)
+    setQuery('')
     fgRef.current?.zoomToFit(800, 50)
   }, [])
 
-  // Configure forces once the network is built
   useEffect(() => {
     const fg = fgRef.current
     if (!fg) return
@@ -263,33 +336,53 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     }
   }, [network, nodeRadius])
 
-  // One-time fit on first render
   useEffect(() => {
-    if (graphData.nodes.length === 0 || didFit.current) return
+    if (graphData.nodes.length === 0) return
+    if (dimensions.width === 0 || dimensions.height === 0) return
+    if (didFit.current) return
     didFit.current = true
-    const t = setTimeout(() => fgRef.current?.zoomToFit(600, 50), 350)
+    const t = setTimeout(() => fgRef.current?.zoomToFit(600, 50), 300)
     return () => clearTimeout(t)
-  }, [graphData])
+  }, [graphData, dimensions])
 
-  // Refit when a search is cleared
   useEffect(() => {
-    const wasFiltering = prevQuery.current
-    prevQuery.current = query
-    if (wasFiltering && !query && graphData.nodes.length > 0) {
-      const t = setTimeout(() => fgRef.current?.zoomToFit(600, 50), 350)
-      return () => clearTimeout(t)
-    }
-  }, [query, graphData])
+    if (query.trim() === '') didFit.current = false
+  }, [query])
 
-  const selectedNode = useMemo(() => {
+  const selectedDetail = useMemo<SelectedDetail>(() => {
     if (!selectedId) return null
-    return network.nodes.find(n => n.id === selectedId) || null
-  }, [selectedId, network])
+    const node = network.nodes.find(n => n.id === selectedId)
+    if (!node) return null
+    const edges = network.links.filter(l => linkId(l.source) === selectedId || linkId(l.target) === selectedId)
+    const otherId = (e: BrainLink) => (linkId(e.source) === selectedId ? linkId(e.target) : linkId(e.source))
 
-  const selectedReels = useMemo(() => {
-    if (!selectedNode) return []
-    return completeReels.filter(r => selectedNode.reelIds.includes(r.id))
-  }, [selectedNode, completeReels])
+    if (node.type === 'reel') {
+      const reel = completeReels.find(r => r.id === node.reelIds[0])
+      if (!reel) return null
+      const concepts: { name: string; weight: number }[] = []
+      const entities: string[] = []
+      const similar: ReelDetail['similar'] = []
+      const bridges: string[] = []
+      let creator: string | undefined
+      for (const e of edges) {
+        const other = otherId(e)
+        const on = network.nodes.find(n => n.id === other)
+        if (e.kind === 'concept') concepts.push({ name: on?.name || other, weight: e.value })
+        else if (e.kind === 'entity') entities.push(on?.name || other)
+        else if (e.kind === 'creator') creator = on?.name || other
+        else if (e.kind === 'similar') {
+          const targetReel = completeReels.find(r => r.id === on?.reelIds?.[0])
+          if (targetReel) similar.push({ reelId: targetReel.id, title: targetReel.title, score: e.value })
+        }
+        else if (e.kind === 'bridge') bridges.push(on?.name || other)
+      }
+      similar.sort((a, b) => b.score - a.score)
+      return { kind: 'reel', reel, concepts, entities, creator, similar, bridges }
+    }
+
+    const reels = completeReels.filter(r => node.reelIds.includes(r.id))
+    return { kind: 'node', node, reels }
+  }, [selectedId, network, completeReels])
 
   if (completeReels.length === 0) {
     return (
@@ -308,7 +401,7 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full"
+      className="relative w-full h-full min-h-[55vh]"
       style={{ background: 'radial-gradient(130% 100% at 50% 0%, #101014 0%, #09090b 60%)' }}
     >
       <ForceGraph2D<BrainNode, BrainLink>
@@ -324,12 +417,15 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
         nodeLabel={nodeLabel}
         nodeCanvasObject={handleNodeCanvasObject}
         nodePointerAreaPaint={handleNodePointerArea}
+        linkLabel={linkLabel}
         linkColor={linkColor}
         linkWidth={linkWidth}
         linkCurvature={0.12}
         backgroundColor="rgba(0,0,0,0)"
         onNodeClick={handleNodeClick}
         onNodeHover={handleNodeHover}
+        onLinkHover={handleLinkHover}
+        onBackgroundClick={() => setSelectedId(null)}
         d3VelocityDecay={0.35}
         warmupTicks={30}
         cooldownTicks={120}
@@ -375,9 +471,9 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
       </button>
 
       {/* Interaction hint — auto-hides */}
-      {showHint && !query && (
+      {showHint && !query && !selectedDetail && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 bg-zinc-900/90 border border-zinc-800 rounded-lg px-3 py-2 text-[10px] text-zinc-500 pointer-events-none z-10 whitespace-nowrap">
-          <p>Drag to pan · Scroll or pinch to zoom · Tap a reel to open · Tap a concept to focus</p>
+          <p>Tap a node to explore its links · Hover a line for why · Double-tap a reel to open</p>
         </div>
       )}
 
@@ -395,15 +491,24 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
         <p className="font-medium text-zinc-300 mb-1">Node types</p>
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-full shrink-0" style={{ background: BRAIN_NODE_COLORS.concept }} />
-          <span className="text-zinc-400 text-[11px]">Concept</span>
+          <span className="text-zinc-400 text-[11px]">Concept (shared topic)</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-full shrink-0" style={{ background: BRAIN_NODE_COLORS.entity }} />
-          <span className="text-zinc-400 text-[11px]">Entity (book, tool, person…)</span>
+          <span className="text-zinc-400 text-[11px]">Entity (book, tool, person)</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-full shrink-0" style={{ background: BRAIN_NODE_COLORS.creator }} />
           <span className="text-zinc-400 text-[11px]">Creator</span>
+        </div>
+        <div className="pt-2 mt-2 border-t border-zinc-800">
+          <p className="font-medium text-zinc-300 mb-1">Link types</p>
+          {Object.entries(BRAIN_LINK_KINDS).map(([kind, label]) => (
+            <div key={kind} className="flex items-center gap-2">
+              <span className="w-3 h-px shrink-0" style={{ background: kind === 'similar' ? '#38bdf8' : kind === 'bridge' ? '#f472b6' : '#71717a' }} />
+              <span className="text-zinc-400 text-[11px] capitalize">{label}</span>
+            </div>
+          ))}
         </div>
         <div className="pt-2 mt-2 border-t border-zinc-800">
           <p className="font-medium text-zinc-300 mb-1">Categories</p>
@@ -418,52 +523,153 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
         </div>
         <div className="mt-2 pt-2 border-t border-zinc-800 space-y-0.5">
           <p className="text-[10px] text-zinc-500">Larger nodes = more connections</p>
-          <p className="text-[10px] text-zinc-500">Similar reels are linked by topic</p>
+          <p className="text-[10px] text-zinc-500">Only meaningful links are shown</p>
         </div>
       </div>
 
-      {/* Focus panel */}
-      {selectedNode && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[min(360px,calc(100%-1.5rem))] bg-zinc-900/95 border border-zinc-700 rounded-xl p-3 z-10 shadow-xl shadow-black/40">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: selectedNode.color }} />
-              <span className="text-xs font-semibold text-zinc-200 truncate">{selectedNode.name}</span>
-            </div>
-            <button onClick={() => setSelectedId(null)} className="text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 p-1" aria-label="Clear focus">
-              <X size={13} />
-            </button>
-          </div>
-          <p className="text-[10px] text-zinc-500 capitalize mb-2">
-            {selectedNode.type} · {selectedNode.reelIds.length} reel{selectedNode.reelIds.length === 1 ? '' : 's'}
-          </p>
-          {selectedReels.length > 0 && (
-            <div className="space-y-1 max-h-28 overflow-y-auto">
-              {selectedReels.slice(0, 5).map(reel => (
-                <button
-                  key={reel.id}
-                  onClick={() => onReelClick?.(reel.id)}
-                  className="w-full text-left px-2.5 py-1.5 rounded-lg bg-zinc-800/60 hover:bg-zinc-800 text-[11px] text-zinc-300 transition-colors flex items-center gap-1.5 min-h-[32px]"
-                >
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: getCategoryColor(reel.primaryCategory || reel.categoryPath?.[0] || 'Other') }} />
-                  <span className="truncate">{reel.title}</span>
+      {/* Connection detail panel */}
+      {selectedDetail && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[min(380px,calc(100%-1.5rem))] bg-zinc-900/95 border border-zinc-700 rounded-xl p-3 z-10 shadow-xl shadow-black/40 max-h-[55vh] overflow-y-auto">
+          {selectedDetail.kind === 'node' ? (
+            <>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: selectedDetail.node.color }} />
+                  <span className="text-xs font-semibold text-zinc-200 truncate">{selectedDetail.node.name}</span>
+                </div>
+                <button onClick={() => setSelectedId(null)} className="text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 p-1" aria-label="Clear focus">
+                  <X size={13} />
                 </button>
-              ))}
-              {selectedReels.length > 5 && (
-                <p className="text-[10px] text-zinc-600 pl-2.5">+{selectedReels.length - 5} more</p>
+              </div>
+              <p className="text-[10px] text-zinc-500 mb-2">
+                {selectedDetail.node.type === 'concept' ? 'Shared topic' : selectedDetail.node.type === 'entity' ? 'Entity mentioned in' : 'Creator of'}{' '}
+                {selectedDetail.reels.length} reel{selectedDetail.reels.length === 1 ? '' : 's'}
+              </p>
+              {selectedDetail.reels.length > 0 && (
+                <div className="space-y-1 max-h-28 overflow-y-auto">
+                  {selectedDetail.reels.slice(0, 5).map(reel => (
+                    <button
+                      key={reel.id}
+                      onClick={() => onReelClick?.(reel.id)}
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg bg-zinc-800/60 hover:bg-zinc-800 text-[11px] text-zinc-300 transition-colors flex items-center gap-1.5 min-h-[32px]"
+                    >
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: getCategoryColor(reel.primaryCategory || reel.categoryPath?.[0] || 'Other') }} />
+                      <span className="truncate">{reel.title}</span>
+                    </button>
+                  ))}
+                  {selectedDetail.reels.length > 5 && (
+                    <p className="text-[10px] text-zinc-600 pl-2.5">+{selectedDetail.reels.length - 5} more</p>
+                  )}
+                </div>
               )}
-            </div>
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-800">
+                <button onClick={() => { fgRef.current?.centerAt(selectedDetail.node.x, selectedDetail.node.y, 400); fgRef.current?.zoom(2.4, 600) }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors min-h-[32px]">
+                  <ZoomIn size={11} /> Focus
+                </button>
+                <button onClick={() => setSelectedId(null)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors min-h-[32px]">
+                  Clear
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: getCategoryColor(selectedDetail.reel.primaryCategory || selectedDetail.reel.categoryPath?.[0] || 'Other') }} />
+                  <span className="text-xs font-semibold text-zinc-200 truncate">{selectedDetail.reel.title}</span>
+                </div>
+                <button onClick={() => setSelectedId(null)} className="text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 p-1" aria-label="Close">
+                  <X size={13} />
+                </button>
+              </div>
+              {selectedDetail.reel.creatorHandle && (
+                <p className="text-[10px] text-zinc-500 mb-1.5">@{selectedDetail.reel.creatorHandle}</p>
+              )}
+              {selectedDetail.reel.summary && (
+                <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2 mb-2.5">{selectedDetail.reel.summary}</p>
+              )}
+
+              {selectedDetail.concepts.length > 0 && (
+                <div className="mb-2.5">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium mb-1.5 flex items-center gap-1">
+                    <Tags size={10} /> Concepts
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedDetail.concepts.map(c => (
+                      <span key={c.name} className="inline-flex items-center gap-1 px-2 py-1 bg-violet-500/10 text-violet-300 rounded-lg text-[11px]">
+                        {c.name}
+                        <span className="text-[9px] text-violet-400/70">{Math.round(c.weight * 100)}%</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedDetail.creator && (
+                <div className="mb-2.5">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium mb-1.5 flex items-center gap-1">
+                    <Users size={10} /> Creator
+                  </p>
+                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-rose-500/10 text-rose-300 rounded-lg text-[11px]">{selectedDetail.creator}</span>
+                </div>
+              )}
+
+              {selectedDetail.entities.length > 0 && (
+                <div className="mb-2.5">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium mb-1.5 flex items-center gap-1">
+                    <BookOpen size={10} /> Mentioned
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedDetail.entities.map(name => (
+                      <span key={name} className="px-2 py-1 bg-emerald-500/10 text-emerald-300 rounded-lg text-[11px]">{name}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedDetail.similar.length > 0 && (
+                <div className="mb-2.5">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium mb-1.5">Similar reels</p>
+                  <div className="space-y-1 max-h-24 overflow-y-auto">
+                    {selectedDetail.similar.map(s => (
+                      <button
+                        key={s.reelId}
+                        onClick={() => onReelClick?.(s.reelId)}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg bg-zinc-800/60 hover:bg-zinc-800 text-[11px] text-zinc-300 transition-colors flex items-center gap-1.5 min-h-[32px]"
+                      >
+                        <span className="truncate flex-1">{s.title}</span>
+                        <span className="text-[9px] text-sky-400 shrink-0">{Math.round(s.score * 100)}%</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedDetail.bridges.length > 0 && (
+                <div className="mb-2.5">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium mb-1.5">Co-occurs with</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedDetail.bridges.map(name => (
+                      <span key={name} className="px-2 py-1 bg-pink-500/10 text-pink-300 rounded-lg text-[11px]">{name}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-800">
+                <button onClick={() => onReelClick?.(selectedDetail.reel.id)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors min-h-[32px]">
+                  <ExternalLink size={11} /> Open reel
+                </button>
+                <button onClick={() => setSelectedId(null)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors min-h-[32px]">
+                  Clear
+                </button>
+              </div>
+            </>
           )}
-          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-800">
-            <button onClick={() => { fgRef.current?.centerAt(selectedNode.x, selectedNode.y, 400); fgRef.current?.zoom(2.4, 600) }}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors min-h-[32px]">
-              <ZoomIn size={11} /> Focus
-            </button>
-            <button onClick={() => setSelectedId(null)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors min-h-[32px]">
-              Clear
-            </button>
-          </div>
         </div>
       )}
 

@@ -51,12 +51,16 @@ Also done as part of Phase 0: knowledge graph reworked to a single 2D brain-like
 | # | Item | Status |
 |---|---|---|
 | G.1 | Organic interconnected network: reel, concept (weighted), entity, and creator nodes — no forced category tree | ✅ (`src/utils/brainNetwork.ts`) |
-| G.2 | Cross-reel edges from TF-IDF topic similarity (top-5 per reel) + concept co-occurrence links | ✅ (reuses `src/utils/tfidf.ts`) |
+| G.2 | Cross-reel edges from TF-IDF topic similarity + concept co-occurrence links | ✅ (reuses `src/utils/tfidf.ts`) |
 | G.3 | Obsidian-style interactions: drag to pan, scroll/pinch to zoom, tap reel → open, tap concept/entity/creator → focus + connected reels panel, double-tap → zoom to node, drag to pin | ✅ (`src/components/NeuralGraph.tsx`) |
 | G.4 | Live search that filters the graph to matching reels + their neighbors | ✅ |
 | G.5 | Mobile-first canvas: touch pan/zoom, safe-area bottom sheet panel, compact toolbar; tab renamed "Graph" → "Neural" | ✅ (`Layout.tsx`) |
+| G.6 | **Curated neural engine** — only high-signal links: concepts by weight (≥0.3) or bridge (≥2 reels, top-3/reel), entities only when shared (≥2 reels), topic-similar links deduped against shared concepts (top-3/reel), concept bridges only when co-occurring ≥2 reels | ✅ (`brainNetwork.ts`) |
+| G.7 | **Descriptive + interactive**: per-link reason tooltips ("Shares concept X", "Similar topics — 87%", "Created by @x"), link hover highlight, tap-any-node connection panel (concepts w/ weights, similar reels w/ %, creator, entities, co-occurs), reel tooltips with summary snippet | ✅ (`NeuralGraph.tsx`) |
+| G.8 | **Mobile blank-canvas fix** — robust measurement (layout-effect + ResizeObserver + resize listener), `zoomToFit` guarded to run only on non-zero canvas (was leaving a degenerate transform), `min-h` fallback | ✅ (`NeuralGraph.tsx`) |
 
 **DoD:** typecheck + lint + production build pass. — Committed as `pending`.
+
 
 
 ## Phase 2 — Thin server layer (the unlock)
