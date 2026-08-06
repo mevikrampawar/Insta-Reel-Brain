@@ -27,7 +27,7 @@ Paste a URL → Apify scrapes → Groq analyzes → Firestore stores → TF-IDF 
 - Firebase Auth (Google Sign-In) + Cloud Firestore
 - Groq API (llama-3.3-70b-versatile) for AI analysis
 - Apify API for Instagram scraping
-- react-force-graph-3d + Three.js for 3D knowledge graph
+- react-force-graph-2d for the 2D knowledge graph
 - oxlint for linting
 
 ## Project Structure

@@ -9,7 +9,7 @@ AI-powered personal knowledge system for Instagram Reels. Paste a URL — AI han
 - **Paste & forget** — paste a URL, AI handles scraping, transcription, analysis, and tagging
 - **Non-blocking ingestion** — add multiple URLs while previous ones process in parallel
 - **Semantic search** — TF-IDF with keyword fallback, runs entirely in-browser, no API calls
-- **3D Knowledge Graph** — hierarchical category tree with Reel Brain root node, radial layout, 3D text labels
+- **Knowledge Graph** — brain-like 2D map of your reels: category hubs glow, reel dots orbit a center root
 - **Chat with Library** — ask questions in natural language, get answers citing your saved reels
 - **Smart Collections** — AI auto-organizes reels into categories + manual groups
 - **Deep AI Analysis** — summaries, key takeaways, entities, concepts, quality scores
@@ -43,7 +43,7 @@ Browser → Apify API (scrape) → Groq API (analyze) → Firestore (store) → 
 | AI (LLM) | Groq API (llama-3.3-70b-versatile) |
 | Scraping | Apify API (instagram-reel-scraper actor) |
 | Search | TF-IDF (in-browser) |
-| 3D Graph | react-force-graph-3d, Three.js |
+| 2D Graph | react-force-graph-2d |
 | Deploy | GitHub Pages (via GitHub Actions) |
 
 ## Setup
