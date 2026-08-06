@@ -39,7 +39,7 @@ const primaryTabs = [
   { id: 'library', label: 'Library', icon: FolderOpen, tour: 'nav-library' },
   { id: 'ingest', label: 'Add', icon: Plus, tour: 'nav-ingest' },
   { id: 'chat', label: 'Chat', icon: MessageSquare, tour: 'nav-chat' },
-  { id: 'graph', label: 'Graph', icon: Network, tour: 'nav-graph' },
+  { id: 'graph', label: 'Neural', icon: Network, tour: 'nav-graph' },
 ]
 
 const secondaryTabs = [

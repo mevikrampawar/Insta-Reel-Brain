@@ -46,6 +46,19 @@ Also done as part of Phase 0: knowledge graph reworked to a single 2D brain-like
 
 ---
 
+## Neural Graph — Obsidian-style canvas
+
+| # | Item | Status |
+|---|---|---|
+| G.1 | Organic interconnected network: reel, concept (weighted), entity, and creator nodes — no forced category tree | ✅ (`src/utils/brainNetwork.ts`) |
+| G.2 | Cross-reel edges from TF-IDF topic similarity (top-5 per reel) + concept co-occurrence links | ✅ (reuses `src/utils/tfidf.ts`) |
+| G.3 | Obsidian-style interactions: drag to pan, scroll/pinch to zoom, tap reel → open, tap concept/entity/creator → focus + connected reels panel, double-tap → zoom to node, drag to pin | ✅ (`src/components/NeuralGraph.tsx`) |
+| G.4 | Live search that filters the graph to matching reels + their neighbors | ✅ |
+| G.5 | Mobile-first canvas: touch pan/zoom, safe-area bottom sheet panel, compact toolbar; tab renamed "Graph" → "Neural" | ✅ (`Layout.tsx`) |
+
+**DoD:** typecheck + lint + production build pass. — Committed as `pending`.
+
+
 ## Phase 2 — Thin server layer (the unlock)
 
 Grow the Cloudflare Worker into the backend. Dual-mode: new users default to server-backed; existing BYOK users keep working (toggle in Settings).
