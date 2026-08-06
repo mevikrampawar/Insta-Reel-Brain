@@ -1,11 +1,13 @@
 import { useMemo, useCallback, useRef, useEffect, useLayoutEffect, useState } from 'react'
 import ForceGraph2D from 'react-force-graph-2d'
-import { Network, RotateCcw, Info, X, Search, ZoomIn, ExternalLink, Tags, BookOpen, Users } from 'lucide-react'
+import { Network, RotateCcw, Info, X, Search, ZoomIn, ExternalLink, Tags, BookOpen, Users, Brain } from 'lucide-react'
 import { buildBrainNetwork, BRAIN_NODE_COLORS, BRAIN_LINK_KINDS, type BrainNode, type BrainLink } from '../utils/brainNetwork'
 import { CATEGORY_COLORS, getCategoryColor } from '../utils/constants'
 import type { Reel } from '../types'
 
 interface Props { reels: Reel[]; onReelClick?: (reelId: string) => void }
+
+const FIRING_MS = 700
 
 function hexToRgba(hex: string, alpha: number): string {
   const h = hex.replace('#', '')
@@ -56,6 +58,7 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
   const [hoverLink, setHoverLink] = useState<BrainLink | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [tick, setTick] = useState(0)
 
   const completeReels = useMemo(() => reels.filter(r => r.ingestStatus === 'complete'), [reels])
 
@@ -64,7 +67,10 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     if (!el) return
     const rect = el.getBoundingClientRect()
     const width = Math.max(Math.round(rect.width), 0)
-    const height = Math.max(Math.round(rect.height), 0)
+    const isMobile = window.matchMedia('(max-width: 767px)').matches
+    const navAllowance = isMobile ? 96 : 0
+    const avail = Math.max(Math.round(window.innerHeight - rect.top - navAllowance), 0)
+    const height = Math.max(Math.round(rect.height), avail)
     setDimensions(prev => (prev.width === width && prev.height === height) ? prev : { width, height })
   }, [])
 
@@ -85,8 +91,25 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
   }, [measure])
 
   useEffect(() => {
-    const t = setTimeout(() => setShowHint(false), 5000)
+    const t = setTimeout(() => setShowHint(false), 6000)
     return () => clearTimeout(t)
+  }, [])
+
+  // Brain pulse: sweep a firing synapse + keep the network gently alive
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.hidden) return
+      setTick(t => t + 1)
+    }, FIRING_MS)
+    return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.hidden) return
+      fgRef.current?.d3ReheatSimulation()
+    }, 2600)
+    return () => clearInterval(id)
   }, [])
 
   const network = useMemo(() => buildBrainNetwork(completeReels), [completeReels])
@@ -136,12 +159,17 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     }
   }, [query, network, completeReels])
 
+  const firingLink = useMemo(() => {
+    if (graphData.links.length === 0) return null
+    return graphData.links[tick % graphData.links.length] || null
+  }, [graphData, tick])
+
   const nodeRadius = useCallback((node: BrainNode) => {
     const v = Math.max(node.val, 1)
     if (node.type === 'reel') return Math.min(3.5 + Math.sqrt(v) * 1.1, 8)
     if (node.type === 'concept') return Math.min(4.5 + Math.sqrt(v) * 1.3, 12)
     if (node.type === 'creator') return Math.min(4 + Math.sqrt(v) * 0.8, 7)
-    return 3.5
+    return 3
   }, [])
 
   const handleNodeClick = useCallback((node: BrainNode) => {
@@ -186,7 +214,7 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     const verb = node.type === 'concept' ? 'shared topic' : node.type === 'entity' ? 'mentioned in' : 'created'
     return `<div style="background:#18181b;color:#e4e4e7;padding:6px 10px;border-radius:6px;font-size:12px;max-width:240px;border:1px solid #27272a;">
       <div style="font-weight:600;margin-bottom:2px;color:${node.color}">${node.name}</div>
-      <div style="color:#a1a1aa;font-size:10px;">${node.type} · ${verb} ${count} reel${count === 1 ? '' : 's'}</div>
+      <div style="color:#a1a1aa;font-size:10px;">${node.type}${node.hub ? ' · hub' : ''} · ${verb} ${count} reel${count === 1 ? '' : 's'}</div>
     </div>`
   }, [completeReels])
 
@@ -194,15 +222,29 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     const x = node.x ?? 0
     const y = node.y ?? 0
     const r = nodeRadius(node)
+    const now = performance.now()
     const hovered = hoverNodeId === node.id
     const isSelected = selectedId === node.id
-    const linkedToHover = hoverLink != null && (linkId(hoverLink.source) === node.id || linkId(hoverLink.target) === node.id)
+    const firingEndpoint = firingLink != null && (linkId(firingLink.source) === node.id || linkId(firingLink.target) === node.id)
     let dimmed = false
     if (selectedId != null) dimmed = !connectedIds.has(node.id)
-    else if (hoverLink != null) dimmed = !linkedToHover
+    else if (hoverLink != null) dimmed = !(linkId(hoverLink.source) === node.id || linkId(hoverLink.target) === node.id)
 
-    ctx.globalAlpha = dimmed ? 0.1 : hovered ? 1 : 0.88
+    // Neuron halo — soft radial glow, breathing slowly
+    if (!dimmed) {
+      const haloR = r * (node.type === 'concept' ? (node.hub ? 3.6 : 2.8) : 2.2)
+      const pulse = 0.8 + 0.2 * Math.sin(now / 320 + (node.index ?? 0))
+      const haloAlpha = firingEndpoint ? 0.9 : hovered ? 0.5 : node.hub ? 0.42 : 0.3
+      const g = ctx.createRadialGradient(x, y, r * 0.2, x, y, haloR)
+      g.addColorStop(0, hexToRgba(node.color, haloAlpha * pulse))
+      g.addColorStop(1, hexToRgba(node.color, 0))
+      ctx.fillStyle = g
+      ctx.beginPath()
+      ctx.arc(x, y, haloR, 0, 2 * Math.PI)
+      ctx.fill()
+    }
 
+    ctx.globalAlpha = dimmed ? 0.1 : 1
     if (node.type === 'concept') {
       ctx.beginPath()
       ctx.moveTo(x, y - r)
@@ -212,8 +254,8 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
       ctx.closePath()
       ctx.fillStyle = node.color
       ctx.fill()
-      ctx.strokeStyle = 'rgba(255,255,255,0.25)'
-      ctx.lineWidth = 1 / globalScale
+      ctx.strokeStyle = node.hub ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.22)'
+      ctx.lineWidth = (node.hub ? 1.4 : 1) / globalScale
       ctx.stroke()
     } else {
       ctx.beginPath()
@@ -226,41 +268,40 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
         ctx.stroke()
       }
     }
-
-    if (isSelected) {
-      ctx.beginPath()
-      ctx.arc(x, y, r + 3.5, 0, 2 * Math.PI)
-      ctx.strokeStyle = '#ffffff'
-      ctx.lineWidth = 1.5 / globalScale
-      ctx.stroke()
-    }
-    if (linkedToHover) {
-      ctx.beginPath()
-      ctx.arc(x, y, r + 2.5, 0, 2 * Math.PI)
-      ctx.strokeStyle = 'rgba(255,255,255,0.95)'
-      ctx.lineWidth = 1.5 / globalScale
-      ctx.stroke()
-    }
-    if (hovered && node.type !== 'concept') {
-      ctx.beginPath()
-      ctx.arc(x, y, r + 2, 0, 2 * Math.PI)
-      ctx.strokeStyle = 'rgba(255,255,255,0.8)'
-      ctx.lineWidth = 1.5 / globalScale
-      ctx.stroke()
-    }
-
     ctx.globalAlpha = 1
 
-    const showLabel = hovered || isSelected || linkedToHover || globalScale > 1.4
+    if (isSelected) {
+      const pulse = 0.6 + 0.4 * Math.sin(now / 250)
+      ctx.beginPath()
+      ctx.arc(x, y, r + 4 + pulse * 2, 0, 2 * Math.PI)
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)'
+      ctx.lineWidth = 1.5 / globalScale
+      ctx.stroke()
+    } else if (firingEndpoint) {
+      const intensity = 1 - (now % FIRING_MS) / FIRING_MS
+      ctx.beginPath()
+      ctx.arc(x, y, r + 3, 0, 2 * Math.PI)
+      ctx.strokeStyle = `rgba(255,255,255,${0.3 + 0.7 * intensity})`
+      ctx.lineWidth = (1.5 + intensity) / globalScale
+      ctx.stroke()
+    } else if (hovered) {
+      ctx.beginPath()
+      ctx.arc(x, y, r + 2, 0, 2 * Math.PI)
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)'
+      ctx.lineWidth = 1.5 / globalScale
+      ctx.stroke()
+    }
+
+    const showLabel = hovered || isSelected || firingEndpoint || globalScale > 1.5
     if (!showLabel || dimmed) return
     const bold = node.type === 'concept' || node.type === 'creator'
     ctx.font = `${bold ? 600 : 400} ${(node.type === 'concept' ? 10 : 9) / globalScale}px Inter, system-ui, sans-serif`
-    ctx.fillStyle = hovered ? '#ffffff' : 'rgba(212, 212, 216, 0.95)'
+    ctx.fillStyle = hovered || firingEndpoint ? '#ffffff' : 'rgba(212, 212, 216, 0.95)'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
     const label = truncateLabel(ctx, node.name, 170 / globalScale)
     ctx.fillText(label, x, y + r + 3 / globalScale)
-  }, [nodeRadius, selectedId, connectedIds, hoverNodeId, hoverLink])
+  }, [nodeRadius, selectedId, connectedIds, hoverNodeId, hoverLink, firingLink])
 
   const handleNodePointerArea = useCallback((node: BrainNode, color: string, ctx: CanvasRenderingContext2D) => {
     const r = Math.max(nodeRadius(node) * 1.8, 7)
@@ -272,28 +313,37 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
 
   const linkColor = useCallback((link: BrainLink) => {
     const isHoveredLink = hoverLink === link
-    const isDim = (() => {
-      if (selectedId != null) {
-        const src = linkId(link.source)
-        const tgt = linkId(link.target)
-        return !connectedIds.has(src) || !connectedIds.has(tgt)
-      }
-      if (hoverLink != null) return link !== hoverLink
-      return false
-    })()
-    if (isDim) return 'rgba(255,255,255,0.04)'
+    const isFiring = firingLink === link
+    let dimmed = false
+    if (selectedId != null) {
+      const src = linkId(link.source)
+      const tgt = linkId(link.target)
+      dimmed = !connectedIds.has(src) || !connectedIds.has(tgt)
+    } else if (hoverLink != null) {
+      dimmed = link !== hoverLink
+    }
+    if (dimmed) return 'rgba(255,255,255,0.04)'
+    if (isFiring) {
+      const i = 1 - (performance.now() % FIRING_MS) / FIRING_MS
+      return `rgba(255,255,255,${0.35 + 0.65 * i})`
+    }
     if (isHoveredLink) return 'rgba(255,255,255,0.9)'
     const srcColor = nodeColors.get(linkId(link.source)) || '#818cf8'
-    return hexToRgba(srcColor, link.kind === 'similar' ? 0.4 : 0.32)
-  }, [nodeColors, selectedId, connectedIds, hoverLink])
+    return hexToRgba(srcColor, link.kind === 'similar' ? 0.42 : 0.34)
+  }, [nodeColors, selectedId, connectedIds, hoverLink, firingLink])
 
   const linkWidth = useCallback((link: BrainLink) => {
     const v = Math.max(link.value || 0, 0.05)
     const base = link.kind === 'similar' ? 0.5 + Math.min(v, 1) * 1.4
-      : link.kind === 'bridge' ? 0.6 + Math.min(v, 1) * 0.8
-      : 0.8 + Math.min(v, 1) * 1.2
-    return hoverLink === link ? base * 2.5 : base
-  }, [hoverLink])
+      : link.kind === 'bridge' ? 0.5 + Math.min(v, 1) * 0.7
+      : 0.7 + Math.min(v, 1) * 1.1
+    if (hoverLink === link) return base * 2.5
+    if (firingLink === link) {
+      const i = 1 - (performance.now() % FIRING_MS) / FIRING_MS
+      return base * (1.3 + 1.4 * i)
+    }
+    return base
+  }, [hoverLink, firingLink])
 
   const linkLabel = useCallback((link: BrainLink) => {
     const kind = BRAIN_LINK_KINDS[link.kind]
@@ -321,18 +371,24 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     if (!fg) return
     const charge = fg.d3Force('charge')
     if (charge) {
-      charge.strength(-220)
-      charge.distanceMax(650)
+      charge.strength(-80)
+      charge.distanceMax(420)
     }
     const link = fg.d3Force('link')
     if (link) {
-      link.distance(42)
-      link.strength(0.35)
+      link.distance((l: BrainLink) => {
+        const k = (l as BrainLink).kind
+        if (k === 'concept') return 20
+        if (k === 'similar') return 28
+        if (k === 'creator' || k === 'entity') return 32
+        return 48
+      })
+      link.strength(0.45)
     }
     const center = fg.d3Force('center')
-    if (center) center.strength(0.12)
+    if (center) center.strength(0.3)
     if (fg.d3 && typeof fg.d3.forceCollide === 'function') {
-      fg.d3Force('collide', fg.d3.forceCollide().radius((n: BrainNode) => nodeRadius(n) + 6).iterations(2))
+      fg.d3Force('collide', fg.d3.forceCollide().radius((n: BrainNode) => nodeRadius(n) + 7).iterations(2))
     }
   }, [network, nodeRadius])
 
@@ -341,7 +397,7 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     if (dimensions.width === 0 || dimensions.height === 0) return
     if (didFit.current) return
     didFit.current = true
-    const t = setTimeout(() => fgRef.current?.zoomToFit(600, 50), 300)
+    const t = setTimeout(() => fgRef.current?.zoomToFit(600, 40), 350)
     return () => clearTimeout(t)
   }, [graphData, dimensions])
 
@@ -388,7 +444,7 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center space-y-3 px-6">
-          <Network size={32} className="text-zinc-700 mx-auto" />
+          <Brain size={32} className="text-zinc-700 mx-auto" />
           <p className="text-sm text-zinc-400">No analyzed reels to visualize</p>
           <p className="text-xs text-zinc-600">Add reels to grow your Reel Brain</p>
         </div>
@@ -401,8 +457,11 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full min-h-[55vh]"
-      style={{ background: 'radial-gradient(130% 100% at 50% 0%, #101014 0%, #09090b 60%)' }}
+      className="relative w-full"
+      style={{
+        height: dimensions.height || '55vh',
+        background: 'radial-gradient(130% 100% at 50% 0%, #101014 0%, #09090b 60%)',
+      }}
     >
       <ForceGraph2D<BrainNode, BrainLink>
         ref={fgRef}
@@ -420,15 +479,15 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
         linkLabel={linkLabel}
         linkColor={linkColor}
         linkWidth={linkWidth}
-        linkCurvature={0.12}
+        linkCurvature={0.1}
         backgroundColor="rgba(0,0,0,0)"
         onNodeClick={handleNodeClick}
         onNodeHover={handleNodeHover}
         onLinkHover={handleLinkHover}
         onBackgroundClick={() => setSelectedId(null)}
-        d3VelocityDecay={0.35}
-        warmupTicks={30}
-        cooldownTicks={120}
+        d3VelocityDecay={0.3}
+        warmupTicks={20}
+        cooldownTicks={80}
       />
 
       {filteredEmpty && (
@@ -473,7 +532,7 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
       {/* Interaction hint — auto-hides */}
       {showHint && !query && !selectedDetail && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 bg-zinc-900/90 border border-zinc-800 rounded-lg px-3 py-2 text-[10px] text-zinc-500 pointer-events-none z-10 whitespace-nowrap">
-          <p>Tap a node to explore its links · Hover a line for why · Double-tap a reel to open</p>
+          <p>Tap a neuron to explore · Hover a synapse for why · Double-tap a reel to open</p>
         </div>
       )}
 
@@ -488,10 +547,10 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
 
       {/* Legend */}
       <div className={`absolute bottom-14 left-3 bg-zinc-900/95 border border-zinc-700 rounded-lg p-3 text-xs space-y-1.5 max-h-[45vh] overflow-y-auto z-10 transition-all ${legendOpen ? 'block' : 'hidden'}`}>
-        <p className="font-medium text-zinc-300 mb-1">Node types</p>
+        <p className="font-medium text-zinc-300 mb-1">Neurons</p>
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-full shrink-0" style={{ background: BRAIN_NODE_COLORS.concept }} />
-          <span className="text-zinc-400 text-[11px]">Concept (shared topic)</span>
+          <span className="text-zinc-400 text-[11px]">Concept · shared topic (glows = hub)</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-full shrink-0" style={{ background: BRAIN_NODE_COLORS.entity }} />
@@ -502,13 +561,14 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
           <span className="text-zinc-400 text-[11px]">Creator</span>
         </div>
         <div className="pt-2 mt-2 border-t border-zinc-800">
-          <p className="font-medium text-zinc-300 mb-1">Link types</p>
+          <p className="font-medium text-zinc-300 mb-1">Synapses</p>
           {Object.entries(BRAIN_LINK_KINDS).map(([kind, label]) => (
             <div key={kind} className="flex items-center gap-2">
               <span className="w-3 h-px shrink-0" style={{ background: kind === 'similar' ? '#38bdf8' : kind === 'bridge' ? '#f472b6' : '#71717a' }} />
               <span className="text-zinc-400 text-[11px] capitalize">{label}</span>
             </div>
           ))}
+          <p className="text-[10px] text-zinc-600 mt-1">White flashes = synapses firing</p>
         </div>
         <div className="pt-2 mt-2 border-t border-zinc-800">
           <p className="font-medium text-zinc-300 mb-1">Categories</p>
@@ -522,8 +582,8 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
           </div>
         </div>
         <div className="mt-2 pt-2 border-t border-zinc-800 space-y-0.5">
-          <p className="text-[10px] text-zinc-500">Larger nodes = more connections</p>
-          <p className="text-[10px] text-zinc-500">Only meaningful links are shown</p>
+          <p className="text-[10px] text-zinc-500">Bigger + brighter = more connected</p>
+          <p className="text-[10px] text-zinc-500">Dense clusters = related topics</p>
         </div>
       </div>
 
@@ -676,7 +736,7 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
       {/* Stats */}
       <div className="absolute bottom-4 right-3 bg-zinc-900/90 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-[9px] text-zinc-500 pointer-events-none z-10 flex items-center gap-1.5">
         <Network size={9} className="text-indigo-400" />
-        {graphData.nodes.length} nodes · {graphData.links.length} links
+        {graphData.nodes.length} neurons · {graphData.links.length} synapses
       </div>
     </div>
   )

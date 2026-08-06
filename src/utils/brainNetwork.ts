@@ -12,7 +12,9 @@ export interface BrainNode {
   color: string
   val: number
   category?: string
+  hub?: boolean
   reelIds: string[]
+  index?: number
   x?: number
   y?: number
   fx?: number
@@ -46,11 +48,11 @@ export const BRAIN_LINK_KINDS: Record<BrainLinkKind, string> = {
   similar: 'similar topics',
 }
 
-const CONCEPT_WEIGHT_MIN = 0.3
-const CONCEPT_MAX_PER_REEL = 3
+const CONCEPT_WEIGHT_MIN = 0.35
+const CONCEPT_MAX_PER_REEL = 2
 const ENTITY_MIN_SHARE = 2
 const BRIDGE_MIN_OVERLAP = 2
-const SIMILARITY_THRESHOLD = 0.25
+const SIMILARITY_THRESHOLD = 0.3
 const TOP_SIMILAR_PER_REEL = 3
 
 function cosineSimilarity(
@@ -240,6 +242,7 @@ export function buildBrainNetwork(reels: Reel[]): BrainNetwork {
   }
   for (const node of nodes) {
     node.val = (degree.get(node.id) || 0) + 1
+    if (node.type === 'concept') node.hub = node.reelIds.length >= 3
   }
 
   return { nodes, links }

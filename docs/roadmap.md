@@ -57,7 +57,9 @@ Also done as part of Phase 0: knowledge graph reworked to a single 2D brain-like
 | G.5 | Mobile-first canvas: touch pan/zoom, safe-area bottom sheet panel, compact toolbar; tab renamed "Graph" → "Neural" | ✅ (`Layout.tsx`) |
 | G.6 | **Curated neural engine** — only high-signal links: concepts by weight (≥0.3) or bridge (≥2 reels, top-3/reel), entities only when shared (≥2 reels), topic-similar links deduped against shared concepts (top-3/reel), concept bridges only when co-occurring ≥2 reels | ✅ (`brainNetwork.ts`) |
 | G.7 | **Descriptive + interactive**: per-link reason tooltips ("Shares concept X", "Similar topics — 87%", "Created by @x"), link hover highlight, tap-any-node connection panel (concepts w/ weights, similar reels w/ %, creator, entities, co-occurs), reel tooltips with summary snippet | ✅ (`NeuralGraph.tsx`) |
-| G.8 | **Mobile blank-canvas fix** — robust measurement (layout-effect + ResizeObserver + resize listener), `zoomToFit` guarded to run only on non-zero canvas (was leaving a degenerate transform), `min-h` fallback | ✅ (`NeuralGraph.tsx`) |
+| G.8 | **Mobile full-screen fix** — viewport-based measurement (graph fills remaining screen above the bottom nav), explicit pixel height instead of fragile `h-full` chain | ✅ (`NeuralGraph.tsx`) |
+| G.9 | **Brain-like neural engine** — organic dense layout (weak charge, strong center pull, short concept synapses, long-range concept bridges), concept hubs (≥3 reels) glow brighter, tighter curation (top-2 concepts/reel, similar ≥30% + dedup, bridges only co-occurring ≥2) | ✅ (`brainNetwork.ts`) |
+| G.10 | **Expressive visuals** — breathing neuron halos, pulsing selection ring, firing-synapse sweep (white glow sweeping the network, reheated for gentle drift), glow on hover | ✅ (`NeuralGraph.tsx`) |
 
 **DoD:** typecheck + lint + production build pass. — Committed as `pending`.
 
