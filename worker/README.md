@@ -17,10 +17,34 @@ The relay writes to Firestore in the background (no browser open, no scrolling i
 | `/api/me` | GET | Bearer ID token | Return the authenticated user's info |
 | `/api/usage/reserve` | POST | Bearer ID token | Atomically reserve one free-tier credit |
 | `/api/usage/release` | POST | Bearer ID token | Atomically release one free-tier credit |
+| `/api/ingest/enqueue` | POST | Bearer ID token | Start server-side ingestion (Apify→Groq→Firestore) for a reel URL |
+| `/api/ingest/webhook` | POST | Apify webhook token (`?token=`) | Apify run-finished callback that advances the ingest job |
+| `/api/ingest/cancel` | POST | Bearer ID token | Cancel an in-progress ingest job (aborts the Apify run, refunds the credit) |
+| `/api/ingest/jobs` | GET | Bearer ID token | List in-progress ingest jobs for the user |
 
 The credits ledger lives in `users/{uid}/settings/preferences` (field `masterKeyUsage`) and is mutated via **Firestore REST transactions**, so concurrent requests can't exceed `FREE_REEL_LIMIT` (default 5).
 
 ## Setup (one-time)
+
+### 0. Provider keys (server-side ingestion)
+
+Server-side ingestion (Phase 2b) runs on provider keys stored as worker secrets. Set them once:
+
+```bash
+npx wrangler secret put APIFY_API_TOKEN   # https://console.apify.com → Settings → API Token
+npx wrangler secret put GROQ_API_KEY      # https://console.groq.com → API Keys
+```
+
+`WORKER_URL` (the public worker URL, used to build Apify webhook callbacks) is already set in `wrangler.jsonc`. For local development, put the same provider keys plus the Firebase secrets in a gitignored `.dev.vars` file:
+
+```
+FIREBASE_PROJECT_ID=...
+FIREBASE_CLIENT_EMAIL=...
+FIREBASE_PRIVATE_KEY=...
+RELAY_SECRET=...
+APIFY_API_TOKEN=...
+GROQ_API_KEY=...
+```
 
 ### 1. Create a Firebase Service Account
 

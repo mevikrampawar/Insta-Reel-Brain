@@ -77,7 +77,7 @@ export async function writePendingUrl(env, userId, url, source = 'ios-shortcut')
   const docId = `pending_${timestamp}_${Math.random().toString(36).slice(2, 8)}`
   const urlPath = `${documentsUrl(env, `users/${encodeURIComponent(userId)}/pendingUrls/${encodeURIComponent(docId)}`)}`
 
-  const res = await firestoreRequest(urlPath, {
+  const res = await firestoreRequest(env, urlPath, {
     method: 'PATCH',
     body: JSON.stringify({
       fields: {
@@ -170,14 +170,14 @@ function buildUsageWrite(env, uid, existingDoc, next) {
 
 async function beginReadWriteTxn(env) {
   const url = documentsUrl(env, '') + ':beginTransaction'
-  const res = await firestoreRequest(url, { method: 'POST', body: JSON.stringify({ readWrite: {} }) })
+  const res = await firestoreRequest(env, url, { method: 'POST', body: JSON.stringify({ readWrite: {} }) })
   const data = await res.json()
   if (!res.ok) throw new Error(`beginTransaction failed: ${data?.error?.message || res.status}`)
   return data.transaction
 }
 
 async function getDocInTxn(env, txnId, path) {
-  const res = await firestoreRequest(documentsUrl(env, path) + `?transaction=${encodeURIComponent(txnId)}`)
+  const res = await firestoreRequest(env, documentsUrl(env, path) + `?transaction=${encodeURIComponent(txnId)}`)
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`transaction read failed: ${res.status}`)
   return res.json()
@@ -185,7 +185,7 @@ async function getDocInTxn(env, txnId, path) {
 
 async function commitTxn(env, txnId, writes) {
   const url = documentsUrl(env, '') + ':commit'
-  const res = await firestoreRequest(url, { method: 'POST', body: JSON.stringify({ transaction: txnId, writes }) })
+  const res = await firestoreRequest(env, url, { method: 'POST', body: JSON.stringify({ transaction: txnId, writes }) })
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
     if (data?.error?.status === 'ABORTED') {
@@ -201,7 +201,7 @@ async function commitTxn(env, txnId, writes) {
 async function rollbackTxn(env, txnId) {
   try {
     const url = documentsUrl(env, '') + ':rollback'
-    await firestoreRequest(url, { method: 'POST', body: JSON.stringify({ transaction: txnId }) })
+    await firestoreRequest(env, url, { method: 'POST', body: JSON.stringify({ transaction: txnId }) })
   } catch {
     // rollback is best-effort
   }
@@ -239,6 +239,143 @@ function pemToBytes(pem) {
 }
 
 // ---- base64url encoding (RFC 4648, no padding, URL-safe) ----
+
+// ---- Server-side ingestion job + reel documents (Phase 2b) ----
+
+export async function createIngestJob(env, uid, job) {
+  const urlPath = `${documentsUrl(env, `users/${encodeURIComponent(uid)}/ingestJobs/${encodeURIComponent(job.jobId)}`)}`
+  const res = await firestoreRequest(env, urlPath, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      fields: toFields(job),
+      currentDocument: { exists: false },
+    }),
+  })
+  if (!res.ok) throw new Error('Failed to create ingest job')
+  return job.jobId
+}
+
+export async function getIngestJob(env, uid, jobId) {
+  const res = await firestoreRequest(env, documentsUrl(env, `users/${encodeURIComponent(uid)}/ingestJobs/${encodeURIComponent(jobId)}`))
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error('Failed to read ingest job')
+  return decodeDoc(await res.json())
+}
+
+export async function updateIngestJob(env, uid, jobId, fields) {
+  const urlPath = documentsUrl(env, `users/${encodeURIComponent(uid)}/ingestJobs/${encodeURIComponent(jobId)}`)
+  const res = await firestoreRequest(env, urlPath, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      fields: toFields(fields),
+      updateMask: { fieldPaths: Object.keys(fields) },
+    }),
+  })
+  if (!res.ok) throw new Error('Failed to update ingest job')
+  return res.json()
+}
+
+export async function createPlaceholderReel(env, uid, fields) {
+  const res = await firestoreRequest(env, documentsUrl(env, `users/${encodeURIComponent(uid)}/reels`), {
+    method: 'POST',
+    body: JSON.stringify({ fields: toFields(fields) }),
+  })
+  if (!res.ok) throw new Error('Failed to create placeholder reel')
+  return decodeDoc(await res.json()).id
+}
+
+export async function updateReelDoc(env, uid, reelId, fields) {
+  const urlPath = documentsUrl(env, `users/${encodeURIComponent(uid)}/reels/${encodeURIComponent(reelId)}`)
+  const res = await firestoreRequest(env, urlPath, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      fields: toFields(fields),
+      updateMask: { fieldPaths: Object.keys(fields) },
+    }),
+  })
+  if (!res.ok) throw new Error('Failed to update reel')
+  return res.json()
+}
+
+export async function deleteReelDoc(env, uid, reelId) {
+  await firestoreRequest(env, documentsUrl(env, `users/${encodeURIComponent(uid)}/reels/${encodeURIComponent(reelId)}`), {
+    method: 'DELETE',
+  })
+}
+
+// Returns the first document in the collection whose `fieldPath` matches any of `values`.
+export async function findDocByField(env, uid, collectionId, fieldPath, values) {
+  const url = documentsUrl(env, `users/${encodeURIComponent(uid)}`) + ':runQuery'
+  const res = await firestoreRequest(env, url, {
+    method: 'POST',
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath },
+            op: 'IN',
+            value: { arrayValue: { values: values.map(v => ({ stringValue: v })) } },
+          },
+        },
+        limit: 1,
+      },
+    }),
+  })
+  if (!res.ok) throw new Error('Failed to query Firestore')
+  const rows = await res.json()
+  const match = (rows || []).find(r => r.document)
+  return match ? decodeDoc(match.document) : null
+}
+
+// ---- Field encoding / decoding (Firestore REST wire format) ----
+
+function toField(value) {
+  if (value === undefined || value === null) return { nullValue: null }
+  if (typeof value === 'string') return { stringValue: value }
+  if (typeof value === 'boolean') return { booleanValue: value }
+  if (typeof value === 'number') {
+    return Number.isInteger(value)
+      ? { integerValue: String(value) }
+      : { doubleValue: value }
+  }
+  if (Array.isArray(value)) {
+    return { arrayValue: { values: value.map(toField) } }
+  }
+  if (typeof value === 'object') return { mapValue: { fields: toFields(value) } }
+  return { nullValue: null }
+}
+
+function toFields(obj) {
+  const fields = {}
+  for (const [key, value] of Object.entries(obj || {})) fields[key] = toField(value)
+  return fields
+}
+
+function fromField(field) {
+  if (!field) return null
+  if ('nullValue' in field) return null
+  if ('stringValue' in field) return field.stringValue
+  if ('booleanValue' in field) return field.booleanValue
+  if ('integerValue' in field) return Number(field.integerValue)
+  if ('doubleValue' in field) return field.doubleValue
+  if ('timestampValue' in field) return field.timestampValue
+  if ('arrayValue' in field) return (field.arrayValue.values || []).map(fromField)
+  if ('mapValue' in field) return fromFields(field.mapValue.fields || {})
+  return null
+}
+
+function fromFields(fields) {
+  const out = {}
+  for (const [key, value] of Object.entries(fields || {})) out[key] = fromField(value)
+  return out
+}
+
+function decodeDoc(doc) {
+  const name = doc?.name || ''
+  const id = name.split('/').pop() || ''
+  return { id, ...fromFields(doc?.fields) }
+}
 
 function base64url(input) {
   let bytes

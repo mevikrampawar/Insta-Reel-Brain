@@ -78,7 +78,32 @@ Grow the Cloudflare Worker into the backend. Dual-mode: new users default to ser
   - ✅ Server-side credits ledger — `masterKeyUsage` mutated via Firestore REST readWrite transactions (begin/read/commit/rollback with retry on abort); client `ApiKeyContext` now prefers the worker and falls back to the old client-side transaction when the worker is unconfigured (`worker/firestore.js`, `src/services/relay.ts`, `src/config/relay.ts`).
   - ⬜ **Remaining:** server-side key vault — provider keys in Worker secrets; **per-user keys encrypted** at rest + migration of existing plaintext BYOK keys (deferred; needs careful design to not break BYOK users).
 
-- **2b. Server-side ingestion** — move Apify→Groq→Firestore into the worker with a real queue (Durable Object): webhook completion, retries, dedup, abort-on-cancel.
+- **2b. Server-side ingestion** — move Apify→Groq→Firestore into the worker with a real per-user queue (Durable Object): webhook completion, retries, dedup, abort-on-cancel.
+
+  **Design.** A per-user Durable Object (`IngestQueue`, `INGEST_QUEUE` binding) is the job coordinator; Firestore stays the durable source of truth. The DO owns the state machine (`queued → apify_running → analyzing → complete | failed | cancelled`) and persists in-progress jobs in SQLite-backed DO storage. Completion is pushed via an **Apify webhook** that the worker forwards to the DO; a DO **alarm** backstop polls Apify if the webhook never arrives (≤3 retries, exponential backoff 30s/2m/10m). The server path runs on **provider keys** (worker secrets `APIFY_API_TOKEN`, `GROQ_API_KEY`); the per-user encrypted BYOK vault stays deferred (2a remaining). Enqueue **reserves one free-tier credit server-side**; release on terminal failure/cancel, keep on success. The worker must mirror the client's exact reel/analysis field shapes (single source of truth is `processReel` + `addReel`).
+
+  **State machine + API contract.**
+  - `POST /api/ingest/enqueue {url, source}` (Bearer ID token) → validate + dedup (existing reel OR active job with same normalized URL) → reserve credit → create placeholder reel (`ingestStatus: 'queued'`) → create `users/{uid}/ingestJobs/{jobId}` → forward to DO → `201 {ok, jobId, reelId, status}` or `409 duplicate` / `403 limit-reached`.
+  - `POST /api/ingest/webhook/{jobId}?token=…` — Apify fires on run terminal state; worker validates the token (constant-time compare) then calls the DO.
+  - `POST /api/ingest/cancel {jobId}` → DO aborts the Apify run (best-effort), marks reel `failed "Cancelled by user"`, releases credit.
+  - Progress: DO writes `ingestStatus` + `ingestStep` + `errorMessage` on the reel doc → the client's existing Firestore subscription streams it (no polling endpoint needed).
+  - `GET /api/ingest/jobs` → in-progress jobs for the user (queue panel).
+
+  | # | Item | Where | Status |
+  |---|---|---|---|
+  | 2b.1 | Provider-key secrets (`APIFY_API_TOKEN`, `GROQ_API_KEY`) + `WORKER_URL` var + setup docs | `wrangler.jsonc`, README/worker header | ✅ (docs + `WORKER_URL` var; secrets set at deploy time) |
+  | 2b.2 | Job doc model + Firestore helpers (create/get/update/query-by-url, placeholder reel write, final analyzed write) | `worker/firestore.js` | ✅ |
+  | 2b.3 | `IngestQueue` Durable Object — state machine, alarm backstop, retries, abort | `worker/ingest-queue.js` + binding/migration in `wrangler.jsonc` | ✅ |
+  | 2b.4 | Server-side Apify client (start run **with webhook**, poll, fetch dataset, abort) + Groq port (analyze/classify/extract) | `worker/apify.js`, `worker/groq.js` | ✅ |
+  | 2b.5 | Webhook route + token validation + forward to DO | `worker/index.js` | ✅ |
+  | 2b.6 | Enqueue/cancel/jobs routes + credit reserve/release wiring | `worker/index.js` | ✅ |
+  | 2b.7 | Retry policy (transient vs terminal), duplicate detection, job expiry | `worker/ingest-queue.js` | ✅ |
+  | 2b.8 | End-to-end test harness (curl + webhook sim) + worker logs; verify a real scrape completes via webhook | `scripts/test-ingest.mjs` | 🚧 harness done (24/24 pass); live scrape pending deploy |
+  | 2b.9 | (stretch) Server-side intake of `pendingUrls` so the iOS Shortcut completes without the app open | `worker/index.js` | ⬜ |
+
+  **This pass:** fixed a systematic `firestoreRequest(env, url, init)` argument-order bug (present since 2a) that made every worker→Firestore write fail; fixed the harness's oauth mock, `urlKey` assertion, and Groq classifier mock. `npm run lint` + `npm run typecheck` + `npm run build` + `wrangler deploy --dry-run` all pass; `node scripts/test-ingest.mjs` → 24/24. Live deploy + real Apify→Groq→Firestore cycle deferred (needs `APIFY_API_TOKEN`/`GROQ_API_KEY` secrets).
+
+  **DoD:** `wrangler deploy` green; a real Apify→Groq→Firestore cycle completes via webhook with zero client-side scraping; cancel aborts the run and refunds the credit; duplicate URL rejected; `npm run lint` + `npm run typecheck` + `npm run build` pass (client untouched). Full client cutover to the server path is Phase **2c**.
 - **2c. Client migration** — default capture flow calls the worker; job progress streams back; BYOK path behind the toggle.
 - **2d. Push infra** — VAPID in the worker, subscription storage, `sw.js` push handler (iOS 16.4+, Android, desktop).
 
