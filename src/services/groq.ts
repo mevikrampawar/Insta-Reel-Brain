@@ -159,37 +159,6 @@ Respond with ONLY this JSON:
   return validateAnalysis(parseJsonFromLLMResponse(raw, fallback)) as ReturnType<typeof analyzeReel> extends Promise<infer R> ? R : never
 }
 
-export async function chatWithLibrary(
-  apiKey: string,
-  question: string,
-  context: { reelNumber?: number; title: string; creator?: string; summary: string; transcript: string; tags: string[]; entities?: string; actionItems?: string[]; topComments?: string }[],
-): Promise<string> {
-  const contextStr = context.map((r, i) => {
-    const num = r.reelNumber || i + 1
-    const parts = [
-      `REEL ${num}: "${r.title}" by @${r.creator || 'unknown'}`,
-      r.tags.length > 0 ? `Tags: ${r.tags.join(', ')}` : null,
-      r.entities ? `Entities: ${r.entities}` : null,
-      r.summary ? `Summary: ${r.summary}` : null,
-      r.transcript ? `Transcript excerpt: ${r.transcript.slice(0, 800)}` : null,
-      r.actionItems && r.actionItems.length > 0 ? `Action Items: ${r.actionItems.join('; ')}` : null,
-      r.topComments && r.topComments.length > 0 ? `Top Comments:\n${r.topComments}` : null,
-    ].filter(Boolean)
-    return parts.join('\n')
-  }).join('\n\n---\n\n')
-
-  return callGroq(apiKey, [
-    {
-      role: 'system',
-      content: `You are a helpful assistant that answers questions based on a user's saved Instagram Reel library. Use ONLY the provided Reels as your knowledge base. Always cite which Reel(s) you're referencing by number and creator handle (e.g., "Reel 3 by @creator"). If the library doesn't contain relevant information, say so clearly. Format citations inline like [Reel N: "title" by @creator].`,
-    },
-    {
-      role: 'user',
-      content: `MY REEL LIBRARY:\n\n${contextStr}\n\n---\n\nQUESTION: ${question}`,
-    },
-  ], { temperature: 0.3, max_tokens: 2000 })
-}
-
 export async function classifyReelCategory(
   apiKey: string,
   summary: string,

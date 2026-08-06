@@ -23,6 +23,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
       - run: npm run build
         env:
           VITE_MASTER_GROQ_KEY: ${{ secrets.VITE_MASTER_GROQ_KEY }}

@@ -5,11 +5,12 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { Settings as SettingsIcon, Save, Check, ExternalLink, Trash2, Bot, Zap, Loader2, XCircle, Sparkles, Eye, EyeOff, AlertTriangle, Smartphone, Download, Copy, ChevronDown } from 'lucide-react'
+import { Settings as SettingsIcon, Save, Check, ExternalLink, Trash2, Bot, Zap, Loader2, XCircle, Sparkles, Eye, EyeOff, AlertTriangle, Smartphone, Download, Copy, ChevronDown, RefreshCw } from 'lucide-react'
 import { db, auth } from '../services/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { GoogleAuthProvider, reauthenticateWithPopup } from 'firebase/auth'
 import { clearAllUserData } from '../services/userData'
+import { getErrorLog, clearErrorLog, type ErrorEntry } from '../utils/errorReporter'
 import { toast } from 'sonner'
 
 interface Props { userId: string }
@@ -41,9 +42,12 @@ export function Settings({ userId }: Props) {
   const [iosShortcutOpen, setIosShortcutOpen] = useState(false)
   const [bgRelayOpen, setBgRelayOpen] = useState(false)
   const [pwaOpen, setPwaOpen] = useState(false)
+  const [errorLog, setErrorLog] = useState<ErrorEntry[]>([])
   const mounted = useRef(true)
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+
+  useEffect(() => { setErrorLog(getErrorLog()) }, [])
 
   useEffect(() => {
     const load = async () => {
@@ -480,6 +484,42 @@ export function Settings({ userId }: Props) {
             </div>
           </div>
         )}
+      </Card>
+
+      {/* Error log */}
+      <Separator />
+
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-medium">Diagnostics</h4>
+              <p className="text-xs text-zinc-500">Recent client errors (kept on this device only)</p>
+            </div>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setErrorLog(getErrorLog())}>
+              <RefreshCw size={12} /> Refresh
+            </Button>
+          </div>
+          {errorLog.length === 0 ? (
+            <p className="text-xs text-zinc-600">No errors recorded. Errors are captured automatically and never leave this device.</p>
+          ) : (
+            <div className="space-y-2">
+              {errorLog.slice(0, 10).map((entry, i) => (
+                <div key={i} className="bg-zinc-800/50 rounded-lg px-3 py-2 text-[11px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-red-400 font-medium capitalize truncate">{entry.type}</span>
+                    <span className="text-zinc-600 shrink-0">{new Date(entry.ts).toLocaleString()}</span>
+                  </div>
+                  <p className="text-zinc-300 mt-0.5 break-words">{entry.message}</p>
+                  {entry.stack && <p className="text-zinc-600 mt-0.5 break-words line-clamp-2">{entry.stack}</p>}
+                </div>
+              ))}
+              <Button variant="ghost" size="sm" className="text-xs text-zinc-500" onClick={() => { clearErrorLog(); setErrorLog([]) }}>
+                Clear log
+              </Button>
+            </div>
+          )}
+        </CardContent>
       </Card>
 
       {/* Danger zone */}

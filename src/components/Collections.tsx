@@ -7,7 +7,7 @@ interface Props {
   collections: Collection[]
   reels: Reel[]
   onAdd: (data: Partial<Collection>) => Promise<void>
-  onDelete: (id: string, keepReels?: boolean) => Promise<void>
+  onDelete: (id: string) => Promise<void>
   onRename: (id: string, newName: string) => Promise<void>
   onBatchDelete: (ids: string[]) => Promise<void>
   onBatchMerge: (sourceIds: string[], targetId: string) => Promise<void>
@@ -246,7 +246,7 @@ export function Collections({ collections, reels, onAdd, onDelete, onRename, onB
             "{collections.find(c => c.id === showDeleteConfirm)?.name}" — {collections.find(c => c.id === showDeleteConfirm)?.reelIds?.length || 0} reels will be unaffected.
           </p>
           <div className="flex gap-2">
-            <button onClick={async () => { await onDelete(showDeleteConfirm, true); setShowDeleteConfirm(null) }}
+            <button onClick={async () => { await onDelete(showDeleteConfirm); setShowDeleteConfirm(null) }}
               className="flex-1 min-h-[44px] bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium transition-colors">
               Delete Collection
             </button>

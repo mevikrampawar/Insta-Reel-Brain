@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Reel, DataSourceRecord } from '../types'
-import { startApifyRun, pollApifyRun, fetchApifyDataset, abortApifyRun, type ApifyResult, type ApifyRunStatus } from '../services/apify'
+import { startApifyRun, runApifyScrape, ScrapeCancelledError, fetchApifyDataset, abortApifyRun, type ApifyResult } from '../services/apify'
 import { processReel, type ReelAnalysis } from '../services/ingestion'
 import { withTimeout } from '../utils/timeout'
 
@@ -23,15 +23,11 @@ export interface ScrapeJob {
   updatedAt: number
 }
 
-const POLL_MS = 3000
-const SCRAPE_TIMEOUT_MS = 180_000
 const ANALYZE_TIMEOUT_MS = 300_000
 const QUEUED_TIMEOUT_MS = 300_000
 const STALE_JOB_MS = 30 * 60_000
 const STORAGE_KEY = 'reelbrain-scrape-queue'
 const PROCESSED_URLS_KEY = 'reelbrain-processed-urls'
-
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 function normalizeUrl(raw: string): string {
   return raw.trim().replace(/\/+$/, '')
@@ -205,49 +201,26 @@ export function useScrapeQueue(
         current = { ...current, phase: 'scraping', startedAt, runId, datasetId }
       }
 
-      // ── 2) Scrape phase — poll until success / failure / timeout ─────────
+      // ── 2) Scrape phase — start → poll → fetch with shared timeout/cancel ─
       if (current.phase === 'scraping' && current.runId) {
-        const deadline = Date.now() + SCRAPE_TIMEOUT_MS
         let result: ApifyResult | null = null
         let sources: DataSourceRecord[] = []
-        let datasetId = current.datasetId
+        const datasetId = current.datasetId
 
-        while (mounted.current && !cancelled.current.has(current.id) && Date.now() < deadline) {
-          let status: ApifyRunStatus
-          try {
-            const poll = await pollApifyRun(apifyApiKey, current.runId)
-            status = poll.status
-            if (poll.datasetId) datasetId = poll.datasetId
-          } catch {
-            // Transient network/poll failure — keep retrying until the deadline
-            await sleep(POLL_MS)
-            continue
-          }
-
-          if (status === 'SUCCEEDED') {
-            if (!datasetId) {
-              failJob(current.id, 'Apify finished but returned no dataset')
-              return
-            }
-            const fetched = await fetchApifyDataset(apifyApiKey, datasetId)
-            result = fetched.result
-            sources = fetched.sources
-            break
-          }
-          if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-            failJob(current.id, `Apify run ${String(status).toLowerCase()}`)
-            return
-          }
-          await sleep(POLL_MS)
-        }
-
-        if (!mounted.current || cancelled.current.has(current.id)) return
-        if (!result) {
-          failJob(current.id, Date.now() >= deadline
-            ? 'Timed out while scraping (3 min)'
-            : 'Apify returned no data — the reel may be private or deleted')
+        try {
+          const scrape = await runApifyScrape(apifyApiKey, current.url, {
+            shouldAbort: () => cancelled.current.has(current.id) || !mounted.current,
+            onRun: ({ runId, datasetId }) => patch(current.id, { runId, datasetId }),
+          })
+          result = scrape.result
+          sources = scrape.sources
+        } catch (e) {
+          if (e instanceof ScrapeCancelledError) return
+          failJob(current.id, e instanceof Error ? e.message : 'Scrape failed')
           return
         }
+
+        if (cancelled.current.has(current.id) || !mounted.current) return
 
         // ── 3) Create the reel in Firestore ────────────────────────────────
         const reelId = await addReel({

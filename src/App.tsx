@@ -4,9 +4,10 @@ import { useReels } from './hooks/useReels'
 import { useCollections } from './hooks/useCollections'
 import { useScrapeQueue } from './hooks/useScrapeQueue'
 import { useBatchProcess } from './hooks/useBatchProcess'
+import { NotesProvider } from './hooks/NotesContext'
 import { ApiKeyProvider, useApiKey } from './hooks/ApiKeyContext'
 import { processReel } from './services/ingestion'
-import { startApifyRun, pollApifyRun, fetchApifyDataset } from './services/apify'
+import { runApifyScrape } from './services/apify'
 import { classifyReelHierarchy } from './services/groq'
 import { db } from './services/firebase'
 import { collection, onSnapshot, deleteDoc, doc } from 'firebase/firestore'
@@ -200,6 +201,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
     const completeReels = reels.filter(r => r.ingestStatus === 'complete')
 
     const reelsToClassify = completeReels.filter(r => !r.primaryCategory || !r.categoryPath?.length)
+    const classified = new Map<string, string>()
     for (const reel of reelsToClassify) {
       try {
         const categoryPath = await classifyReelHierarchy(
@@ -210,13 +212,13 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           reel.contentCategory || 'other',
         )
         await updateReel(reel.id, { primaryCategory: categoryPath[0], categoryPath })
+        classified.set(reel.id, categoryPath[0])
       } catch { /* skip classification failure */ }
     }
 
-    const updatedReels = reels.filter(r => r.ingestStatus === 'complete')
-    const reelData = updatedReels.map(r => ({
+    const reelData = completeReels.map(r => ({
       id: r.id,
-      primaryCategory: r.primaryCategory,
+      primaryCategory: classified.get(r.id) ?? r.primaryCategory,
     }))
     return assignReelsByCategory(reelData)
   }, [reels, apiCtx.apiKey, updateReel, assignReelsByCategory])
@@ -242,26 +244,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
     if (!reel || !apiCtx.apifyApiKey) return
     await updateReel(id, { ingestStatus: 'scraping' })
     try {
-      const { runId } = await startApifyRun(apiCtx.apifyApiKey, reel.url)
-      let status = 'RUNNING'
-      let datasetId: string | undefined
-      const deadline = Date.now() + 120_000
-      while (Date.now() < deadline) {
-        const poll = await pollApifyRun(apiCtx.apifyApiKey, runId)
-        status = poll.status
-        datasetId = poll.datasetId
-        if (status === 'SUCCEEDED' || status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') break
-        await new Promise(r => setTimeout(r, 3000))
-      }
-      if (status !== 'SUCCEEDED' || !datasetId) {
-        await updateReel(id, { ingestStatus: 'failed', errorMessage: `Re-scrape failed: ${status}` })
-        return
-      }
-      const { result } = await fetchApifyDataset(apiCtx.apifyApiKey, datasetId)
-      if (!result) {
-        await updateReel(id, { ingestStatus: 'failed', errorMessage: 'Re-scrape returned no data' })
-        return
-      }
+      const { result } = await runApifyScrape(apiCtx.apifyApiKey, reel.url, { timeoutMs: 120_000 })
       await updateReel(id, {
         title: result.title || reel.title,
         caption: result.caption,
@@ -326,20 +309,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
       const reel = reelMap.get(id)
       if (!reel || !apiCtx.apifyApiKey) throw new Error('Reel not found or no Apify key')
       await updateReel(id, { ingestStatus: 'scraping' })
-      const { runId } = await startApifyRun(apiCtx.apifyApiKey, reel.url)
-      let status = 'RUNNING'
-      let datasetId: string | undefined
-      const deadline = Date.now() + 120_000
-      while (Date.now() < deadline) {
-        const poll = await pollApifyRun(apiCtx.apifyApiKey, runId)
-        status = poll.status
-        datasetId = poll.datasetId
-        if (status === 'SUCCEEDED' || status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') break
-        await new Promise(r => setTimeout(r, 3000))
-      }
-      if (status !== 'SUCCEEDED' || !datasetId) throw new Error(`Scrape failed: ${status}`)
-      const { result } = await fetchApifyDataset(apiCtx.apifyApiKey, datasetId)
-      if (!result) throw new Error('No data returned')
+      const { result } = await runApifyScrape(apiCtx.apifyApiKey, reel.url)
       await updateReel(id, {
         title: result.title || reel.title, caption: result.caption, hashtags: result.hashtags,
         mentions: result.mentions, creatorHandle: result.creatorHandle || reel.creatorHandle,
@@ -378,7 +348,6 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           onDelete={deleteReel}
           onDeleteBulk={deleteReelsBulk}
           collections={collections}
-          userId={user.uid}
           onAddToCollection={(reelId, collectionId) => addReelToCollection(collectionId, reelId)}
           highlightReelId={nav.highlightReelId}
           onClearHighlight={clearHighlight}
@@ -468,7 +437,9 @@ export default function App() {
 
   return (
     <ApiKeyProvider userId={user.uid}>
-      <Dashboard user={user} logout={logout} />
+      <NotesProvider userId={user.uid}>
+        <Dashboard user={user} logout={logout} />
+      </NotesProvider>
     </ApiKeyProvider>
   )
 }

@@ -260,3 +260,92 @@ export async function fetchApifyDataset(
     sources,
   }
 }
+
+export class ScrapeCancelledError extends Error {
+  constructor() {
+    super('Scrape cancelled')
+    this.name = 'ScrapeCancelledError'
+  }
+}
+
+export interface RunApifyScrapeOptions {
+  timeoutMs?: number
+  pollMs?: number
+  shouldAbort?: () => boolean
+  onRun?: (info: { runId: string; datasetId?: string }) => void
+  onStatus?: (status: ApifyRunStatus) => void
+}
+
+export interface ScrapeRun {
+  result: ApifyResult
+  sources: DataSourceRecord[]
+  runId: string
+  datasetId: string
+}
+
+const DEFAULT_SCRAPE_TIMEOUT_MS = 180_000
+const DEFAULT_POLL_MS = 3000
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+// Runs the full Apify scrape lifecycle (start → poll → fetch dataset) with a
+// shared timeout and cancellation. Aborts the actor run on cancel to free credits.
+export async function runApifyScrape(
+  apifyApiKey: string,
+  url: string,
+  opts: RunApifyScrapeOptions = {},
+): Promise<ScrapeRun> {
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_SCRAPE_TIMEOUT_MS
+  const pollMs = opts.pollMs ?? DEFAULT_POLL_MS
+  const shouldAbort = opts.shouldAbort ?? (() => false)
+
+  const { runId, datasetId: initialDatasetId } = await startApifyRun(apifyApiKey, url)
+  opts.onRun?.({ runId, datasetId: initialDatasetId })
+  const abort = () => abortApifyRun(apifyApiKey, runId).catch(() => {})
+
+  if (shouldAbort()) {
+    abort()
+    throw new ScrapeCancelledError()
+  }
+
+  let datasetId: string | undefined = initialDatasetId
+  const deadline = Date.now() + timeoutMs
+
+  while (Date.now() < deadline) {
+    if (shouldAbort()) {
+      abort()
+      throw new ScrapeCancelledError()
+    }
+
+    let status: ApifyRunStatus
+    try {
+      const poll = await pollApifyRun(apifyApiKey, runId)
+      status = poll.status
+      if (poll.datasetId) datasetId = poll.datasetId
+    } catch {
+      // Transient network/poll failure — keep retrying until the deadline
+      await sleep(pollMs)
+      continue
+    }
+
+    opts.onStatus?.(status)
+
+    if (status === 'SUCCEEDED') break
+    if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
+      throw new Error(`Apify run ${status.toLowerCase()}`)
+    }
+
+    await sleep(pollMs)
+  }
+
+  if (shouldAbort()) {
+    abort()
+    throw new ScrapeCancelledError()
+  }
+  if (Date.now() >= deadline) throw new Error('Timed out while scraping')
+  if (!datasetId) throw new Error('Apify finished but returned no dataset')
+
+  const fetched = await fetchApifyDataset(apifyApiKey, datasetId)
+  if (!fetched.result) throw new Error('Apify returned no data — the reel may be private or deleted')
+  return { result: fetched.result, sources: fetched.sources, runId, datasetId }
+}

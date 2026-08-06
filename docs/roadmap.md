@@ -33,12 +33,16 @@ Also done as part of Phase 0: knowledge graph reworked to a single 2D brain-like
 
 ## Phase 1 — Client data-layer reliability + bug fixes
 
-1. Kill mutation refetch storms — optimistic local writes + single Firestore subscription (`useReels`, `useCollections`).
-2. Fix N+1 notes query — batch by reelIds, lazy-load on panel open (`ReelCard`, `useNotes`).
-3. Pagination ("load more") + Firestore persistent cache for offline.
-4. Service worker: precache at install, versioned caches + prune (`public/sw.js`).
-5. Correctness bugs: `handleRetroactiveAutoAssign` stale closure, dashboard gradient keys, `keepReels` no-op, unify the 3 taxonomies, de-dupe the two scrape/poll pipelines, delete dead code.
-6. CI: lint + typecheck + smoke test gate in `deploy.yml`; minimal error-tracking sink.
+| # | Item | Status |
+|---|---|---|
+| 1.1 | Kill mutation refetch storms — optimistic local writes + single Firestore subscription | ✅ (`useReels`, `useCollections` rewritten: `onSnapshot` + rollback/`refresh`) |
+| 1.2 | Fix N+1 notes query — per-reel cache, lazy-load on panel open | ✅ (new `NotesContext.tsx` store; `useNotes.ts` deleted) |
+| 1.3 | Pagination ("load more") + Firestore persistent cache for offline | ✅ (`Library.tsx` page-size + load-more; `initializeFirestore` persistent cache) |
+| 1.4 | Service worker: precache at install, versioned caches + prune | ✅ (`public/sw.js` — `-shell`/`-assets` versioned, S-W-R) |
+| 1.5 | Correctness bugs + pipeline de-dupe | ✅ (stale-closure fix, gradient keys, `keepReels` no-op removal, unified `runApifyScrape`, dead code deleted) |
+| 1.6 | CI gates + minimal error-tracking sink | ✅ (lint + typecheck in `deploy.yml`; `utils/errorReporter.ts` + Settings Diagnostics card) |
+
+**DoD:** typecheck + lint (only pre-existing fast-refresh warnings) + production build pass.
 
 ---
 

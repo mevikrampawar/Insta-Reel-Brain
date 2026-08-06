@@ -11,7 +11,6 @@ interface Props {
   onDelete: (id: string) => void
   onDeleteBulk?: (ids: string[]) => void
   collections: Collection[]
-  userId: string
   onAddToCollection: (reelId: string, collectionId: string) => void
   highlightReelId?: string
   onClearHighlight?: () => void
@@ -59,6 +58,8 @@ const DATE_RANGES: { key: DateRange; label: string }[] = [
   { key: 'year', label: 'This Year' },
 ]
 
+const PAGE_SIZE = 30
+
 function sortReels(reels: Reel[], sort: SortKey, qualityScores: Map<string, number>): Reel[] {
   const sorted = [...reels]
   switch (sort) {
@@ -82,7 +83,7 @@ function dateInRange(reel: Reel, range: DateRange): boolean {
   return d >= now - ms
 }
 
-export function Library({ reels, onDelete, onDeleteBulk, collections, userId, onAddToCollection, highlightReelId, onClearHighlight, onReAnalyze, onReScrape, libraryFilters, onBatchReAnalyze, onBatchReScrape }: Props) {
+export function Library({ reels, onDelete, onDeleteBulk, collections, onAddToCollection, highlightReelId, onClearHighlight, onReAnalyze, onReScrape, libraryFilters, onBatchReAnalyze, onBatchReScrape }: Props) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [filters, setFilters] = useState<Filters>({ status: 'all', collection: 'all', categories: [], sentiments: [], qualityMin: 0, creator: 'all', dateRange: 'all' })
   const [sort, setSort] = useState<SortKey>('newest')
@@ -91,8 +92,13 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBatchConfirm, setShowBatchConfirm] = useState<'analyze' | 'scrape' | null>(null)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const reelRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+  }, [searchResults, filters, sort, collections])
 
   useEffect(() => {
     if (!libraryFilters) return
@@ -158,6 +164,8 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
 
     return sortReels(filtered, sort, qualityScores)
   }, [reels, searchResults, filters, sort, collections, qualityScores])
+
+  const visibleReels = useMemo(() => displayReels.slice(0, visibleCount), [displayReels, visibleCount])
 
   const stats = useMemo(() => ({
     total: reels.length,
@@ -522,7 +530,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
 
       {/* Reel grid — responsive columns */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
-        {displayReels.map(reel => (
+        {visibleReels.map(reel => (
           <div
             key={reel.id}
             ref={el => { if (el) reelRefs.current.set(reel.id, el) }}
@@ -541,7 +549,6 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
             )}
             <ReelCard
               reel={reel}
-              userId={userId}
               onDelete={onDelete}
               collections={collections}
               onAddToCollection={onAddToCollection}
@@ -565,6 +572,18 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
           </div>
         )}
       </div>
+
+      {/* Load more */}
+      {visibleCount < displayReels.length && (
+        <div className="flex justify-center pt-1">
+          <button
+            onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+            className="px-4 py-2.5 rounded-xl text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 transition-colors min-h-[40px]"
+          >
+            Load more ({displayReels.length - visibleCount} remaining)
+          </button>
+        </div>
+      )}
 
       {/* Batch confirmation dialog */}
       {showBatchConfirm && (

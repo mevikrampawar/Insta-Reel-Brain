@@ -1,14 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ExternalLink, Tag, Clock, Trash2, ChevronDown, ChevronUp, AlertCircle, FolderPlus, StickyNote, Heart, MessageCircle, Play, Eye, Music, MapPin, Users, Shield, BookOpen, Package, Wrench, User, Globe, Smartphone, GraduationCap, Star, RefreshCw, Download } from 'lucide-react'
 import type { Reel, Collection } from '../types'
-import { useNotes } from '../hooks/useNotes'
+import { useNotesStore } from '../hooks/NotesContext'
 import { Notes } from './Notes'
 import { computeQualityScore, getQualityLabel, getQualityColor } from '../utils/quality'
 import { formatCount, formatElapsed, hashColor } from '../utils/format'
 
 interface Props {
   reel: Reel
-  userId: string
   onDelete: (id: string) => void
   collections?: Collection[]
   onAddToCollection?: (reelId: string, collectionId: string) => void
@@ -23,13 +22,19 @@ function formatDuration(sec: number): string {
   return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`
 }
 
-export function ReelCard({ reel, userId, onDelete, collections, onAddToCollection, onReAnalyze, onReScrape }: Props) {
+export function ReelCard({ reel, onDelete, collections, onAddToCollection, onReAnalyze, onReScrape }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [showCollections, setShowCollections] = useState(false)
   const [summaryExpanded, setSummaryExpanded] = useState(false)
   const [expandedComments, setExpandedComments] = useState<Set<number>>(new Set())
-  const { notes, loading: notesLoading, addNote, updateNote, deleteNote } = useNotes(userId, reel.id)
+  const { notesByReel, loadingReels, ensureLoaded, addNote, updateNote, deleteNote } = useNotesStore()
+  const notes = notesByReel[reel.id] || []
+  const notesLoading = !!loadingReels[reel.id]
+
+  useEffect(() => {
+    if (showNotes) ensureLoaded(reel.id)
+  }, [showNotes, ensureLoaded, reel.id])
 
   // Failed state
   if (reel.ingestStatus === 'failed') {
@@ -288,7 +293,7 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
       {/* === NOTES === */}
       {showNotes && (
         <div className="border-t border-zinc-800 px-4 py-3">
-          <Notes notes={notes} reelTitle={reel.title} onAdd={(data) => addNote({ ...data, reelId: reel.id })} onUpdate={updateNote} onDelete={deleteNote} loading={notesLoading} />
+          <Notes notes={notes} reelTitle={reel.title} onAdd={(data) => addNote(reel.id, data.content || '')} onUpdate={(id, content) => updateNote(reel.id, id, content)} onDelete={(id) => deleteNote(reel.id, id)} loading={notesLoading} />
         </div>
       )}
 

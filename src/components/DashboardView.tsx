@@ -32,14 +32,13 @@ const item = {
 }
 
 const categoryGradients: Record<string, string> = {
-  'fitness': 'from-orange-500 to-red-600',
-  'education': 'from-blue-500 to-indigo-600',
-  'comedy': 'from-yellow-400 to-orange-500',
-  'cooking': 'from-green-500 to-emerald-600',
-  'tech': 'from-cyan-500 to-blue-600',
-  'fashion': 'from-pink-500 to-purple-600',
-  'music': 'from-purple-500 to-indigo-600',
-  'travel': 'from-teal-400 to-cyan-600',
+  'educational': 'from-blue-500 to-indigo-600',
+  'entertainment': 'from-yellow-400 to-orange-500',
+  'motivational': 'from-rose-500 to-red-600',
+  'instructional': 'from-emerald-500 to-teal-600',
+  'review': 'from-purple-500 to-indigo-600',
+  'storytelling': 'from-fuchsia-500 to-purple-600',
+  'news': 'from-cyan-500 to-blue-600',
   'other': 'from-zinc-500 to-zinc-600',
 }
 
