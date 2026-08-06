@@ -1,5 +1,6 @@
 import { useMemo, useCallback, useRef, useEffect, useState } from 'react'
 import ForceGraph3D from 'react-force-graph-3d'
+import ForceGraph2D from 'react-force-graph-2d'
 import { Network, RotateCcw, Info, X } from 'lucide-react'
 import * as THREE from 'three'
 import { CATEGORY_COLORS, getCategoryColor } from '../utils/constants'
@@ -70,6 +71,8 @@ interface GraphNode {
   reelId?: string
   creator?: string
   tags?: string
+  x?: number
+  y?: number
   fx?: number
   fy?: number
   fz?: number
@@ -82,7 +85,9 @@ interface GraphLink {
 
 export function NeuralGraph({ reels, onReelClick }: Props) {
   const fgRef = useRef<any>(null)
+  const fg2dRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const didFit = useRef(false)
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
   const [legendOpen, setLegendOpen] = useState(false)
   const completeReels = useMemo(() => reels.filter(r => r.ingestStatus === 'complete'), [reels])
@@ -199,6 +204,26 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     }
   }, [onReelClick])
 
+  const nodeLabel = useCallback((node: GraphNode) => {
+    if (node.type === 'root') {
+      return `<div style="background:#18181b;color:#818cf8;padding:8px 14px;border-radius:8px;font-size:14px;font-weight:700;border:1px solid #4f46e5;text-align:center;">
+        Reel Brain
+      </div>`
+    }
+    if (node.type === 'category') {
+      const cat = node.categoryPath?.[0] || 'Other'
+      return `<div style="background:#18181b;color:#e4e4e7;padding:6px 10px;border-radius:6px;font-size:12px;max-width:220px;border:1px solid #27272a;">
+        <div style="font-weight:600;margin-bottom:2px;color:${getCategoryColor(cat)}">${node.name}</div>
+        <div style="color:#a1a1aa;font-size:10px;">${node.categoryPath?.join(' → ') || ''}</div>
+      </div>`
+    }
+    return `<div style="background:#18181b;color:#e4e4e7;padding:6px 10px;border-radius:6px;font-size:12px;max-width:220px;border:1px solid #27272a;">
+      <div style="font-weight:600;margin-bottom:3px;">${node.name}</div>
+      <div style="color:#a1a1aa;font-size:11px;">@${node.creator || 'unknown'}</div>
+      ${node.tags ? `<div style="color:#818cf8;font-size:10px;margin-top:3px;">${node.tags}</div>` : ''}
+    </div>`
+  }, [])
+
   const handleNodeThreeObject = useCallback((node: GraphNode) => {
     if (node.type === 'root') {
       const group = new THREE.Group()
@@ -216,18 +241,67 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     return null
   }, [])
 
+  const nodeRadius = useCallback((node: GraphNode) => {
+    return Math.max(2.5, Math.sqrt(node.val || 1) * 4)
+  }, [])
+
+  const handleNodeCanvasObject = useCallback((node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    const r = nodeRadius(node)
+    const x = node.x ?? 0
+    const y = node.y ?? 0
+
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, 2 * Math.PI)
+    ctx.fillStyle = node.color
+    ctx.fill()
+
+    if (node.type === 'root') {
+      ctx.font = `bold ${13 / globalScale}px Inter, system-ui, sans-serif`
+      ctx.fillStyle = '#c7d2fe'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'bottom'
+      ctx.fillText(node.name, x, y - r - 4 / globalScale)
+    } else if (node.type === 'category') {
+      ctx.font = `${11 / globalScale}px Inter, system-ui, sans-serif`
+      ctx.fillStyle = 'rgba(228,228,231,0.95)'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'bottom'
+      ctx.fillText(node.name, x, y - r - 3 / globalScale)
+    } else if (node.type === 'reel' && globalScale > 1.5) {
+      const title = node.name.length > 18 ? node.name.slice(0, 17) + '…' : node.name
+      ctx.font = `${9 / globalScale}px Inter, system-ui, sans-serif`
+      ctx.fillStyle = 'rgba(161,161,170,0.9)'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'bottom'
+      ctx.fillText(title, x, y - r - 2 / globalScale)
+    }
+  }, [nodeRadius])
+
+  const handleNodePointerArea = useCallback((node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
+    const r = nodeRadius(node)
+    ctx.beginPath()
+    ctx.arc(node.x ?? 0, node.y ?? 0, r, 0, 2 * Math.PI)
+    ctx.fillStyle = color
+    ctx.fill()
+  }, [nodeRadius])
+
   const handleRecalibrate = useCallback(() => {
+    if (dimensions.width < 640) {
+      fg2dRef.current?.zoomToFit(800, 40)
+      return
+    }
     const fg = fgRef.current
     if (!fg) return
-    const isMobile = dimensions.width < 640
     fg.cameraPosition(
-      { x: 0, y: isMobile ? 150 : 200, z: isMobile ? 350 : 500 },
+      { x: 0, y: 200, z: 500 },
       { x: 0, y: 0, z: 0 },
       1500,
     )
   }, [dimensions.width])
 
+  // Configure 3D forces + camera (desktop only)
   useEffect(() => {
+    if (dimensions.width < 640) return
     const fg = fgRef.current
     if (!fg) return
     const charge = fg.d3Force('charge')
@@ -243,12 +317,41 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
     const center = fg.d3Force('center')
     if (center) center.strength(0.05)
 
-    const isMobile = dimensions.width < 640
     fg.cameraPosition(
-      { x: 0, y: isMobile ? 150 : 200, z: isMobile ? 350 : 500 },
+      { x: 0, y: 200, z: 500 },
       { x: 0, y: 0, z: 0 },
     )
   }, [nodes, links, dimensions.width])
+
+  // Configure 2D forces (mobile only)
+  useEffect(() => {
+    if (dimensions.width >= 640) return
+    const fg = fg2dRef.current
+    if (!fg) return
+    const charge = fg.d3Force('charge')
+    if (charge) {
+      charge.strength(-300)
+      charge.distanceMax(450)
+    }
+    const link = fg.d3Force('link')
+    if (link) {
+      link.distance(60)
+      link.strength(0.4)
+    }
+    const center = fg.d3Force('center')
+    if (center) center.strength(0.1)
+  }, [nodes, links, dimensions.width])
+
+  // One-time fit-to-screen on mobile once the graph first renders
+  useEffect(() => {
+    if (dimensions.width >= 640) return
+    if (graphData.nodes.length === 0 || didFit.current) return
+    didFit.current = true
+    const t = setTimeout(() => {
+      fg2dRef.current?.zoomToFit(600, 40)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [dimensions.width, graphData])
 
   if (completeReels.length === 0) {
     return (
@@ -266,7 +369,30 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
 
   return (
     <div ref={containerRef} className="relative w-full h-full">
-      {dimensions.width > 0 && (
+      {dimensions.width > 0 && (isMobile ? (
+        <ForceGraph2D
+          ref={fg2dRef}
+          graphData={graphData}
+          width={dimensions.width}
+          height={dimensions.height}
+          nodeId="id"
+          linkSource="source"
+          linkTarget="target"
+          nodeVal="val"
+          nodeColor="color"
+          nodeLabel={nodeLabel}
+          nodeCanvasObject={handleNodeCanvasObject}
+          nodePointerAreaPaint={handleNodePointerArea}
+          linkColor={() => 'rgba(129, 140, 248, 0.35)'}
+          linkWidth={0.8}
+          linkCurvature={0.1}
+          backgroundColor="#09090b"
+          onNodeClick={handleNodeClick}
+          d3VelocityDecay={0.4}
+          warmupTicks={30}
+          cooldownTicks={80}
+        />
+      ) : (
         <ForceGraph3D
           ref={fgRef}
           graphData={graphData}
@@ -277,25 +403,7 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
           linkTarget="target"
           nodeVal="val"
           nodeColor="color"
-          nodeLabel={(node: GraphNode) => {
-            if (node.type === 'root') {
-              return `<div style="background:#18181b;color:#818cf8;padding:8px 14px;border-radius:8px;font-size:14px;font-weight:700;border:1px solid #4f46e5;text-align:center;">
-                Reel Brain
-              </div>`
-            }
-            if (node.type === 'category') {
-              const cat = node.categoryPath?.[0] || 'Other'
-              return `<div style="background:#18181b;color:#e4e4e7;padding:6px 10px;border-radius:6px;font-size:12px;max-width:220px;border:1px solid #27272a;">
-                <div style="font-weight:600;margin-bottom:2px;color:${getCategoryColor(cat)}">${node.name}</div>
-                <div style="color:#a1a1aa;font-size:10px;">${node.categoryPath?.join(' → ') || ''}</div>
-              </div>`
-            }
-            return `<div style="background:#18181b;color:#e4e4e7;padding:6px 10px;border-radius:6px;font-size:12px;max-width:220px;border:1px solid #27272a;">
-              <div style="font-weight:600;margin-bottom:3px;">${node.name}</div>
-              <div style="color:#a1a1aa;font-size:11px;">@${node.creator || 'unknown'}</div>
-              ${node.tags ? `<div style="color:#818cf8;font-size:10px;margin-top:3px;">${node.tags}</div>` : ''}
-            </div>`
-          }}
+          nodeLabel={nodeLabel}
           nodeThreeObject={handleNodeThreeObject as any}
           nodeThreeObjectExtend={false}
           nodeOpacity={1}
@@ -312,13 +420,13 @@ export function NeuralGraph({ reels, onReelClick }: Props) {
           enablePointerInteraction={true}
           d3VelocityDecay={0.4}
         />
-      )}
+      ))}
 
       {/* Recalibrate */}
       <button
         onClick={handleRecalibrate}
         className="absolute top-3 right-3 bg-zinc-900/90 border border-zinc-700 hover:border-indigo-500 rounded-lg px-3 py-2 text-[11px] text-zinc-400 hover:text-indigo-400 flex items-center gap-1.5 transition-colors cursor-pointer z-10"
-        title="Reset camera"
+        title={isMobile ? 'Fit graph to screen' : 'Reset camera'}
       >
         <RotateCcw size={12} />
         {!isMobile && 'Recalibrate'}

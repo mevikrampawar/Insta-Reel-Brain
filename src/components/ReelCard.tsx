@@ -4,7 +4,7 @@ import type { Reel, Collection } from '../types'
 import { useNotes } from '../hooks/useNotes'
 import { Notes } from './Notes'
 import { computeQualityScore, getQualityLabel, getQualityColor } from '../utils/quality'
-import { formatCount, hashColor } from '../utils/format'
+import { formatCount, formatElapsed, hashColor } from '../utils/format'
 
 interface Props {
   reel: Reel
@@ -40,22 +40,57 @@ export function ReelCard({ reel, userId, onDelete, collections, onAddToCollectio
             <AlertCircle size={16} className="shrink-0" />
             <span className="text-sm font-medium truncate">{reel.title || reel.url}</span>
           </div>
-          <button onClick={() => onDelete(reel.id)} className="text-zinc-500 hover:text-red-400 transition-colors shrink-0 p-1">
+          <button onClick={() => onDelete(reel.id)} className="text-zinc-500 hover:text-red-400 transition-colors shrink-0 p-1" title="Delete">
             <Trash2 size={14} />
           </button>
         </div>
         <p className="text-xs text-zinc-500 mt-1">{reel.errorMessage}</p>
+        {(onReAnalyze || onReScrape) && (
+          <div className="flex items-center gap-1.5 mt-3">
+            {onReAnalyze && (
+              <button onClick={() => onReAnalyze(reel.id)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 transition-colors min-h-[36px]">
+                <RefreshCw size={11} /> Re-analyze
+              </button>
+            )}
+            {onReScrape && reel.url && reel.url !== 'manual-entry' && (
+              <button onClick={() => onReScrape(reel.id)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors min-h-[36px]">
+                <Download size={11} /> Re-scrape
+              </button>
+            )}
+            <button onClick={() => onDelete(reel.id)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-colors ml-auto min-h-[36px]">
+              <Trash2 size={11} /> Delete
+            </button>
+          </div>
+        )}
       </div>
     )
   }
 
   // Processing state
   if (reel.ingestStatus !== 'complete') {
+    const started = reel.createdAt || Date.now()
+    const elapsed = Date.now() - started
+    const stuck = elapsed > 15 * 60_000
     return (
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 animate-pulse">
-        <div className="flex items-center gap-2 text-zinc-400">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+        <div className="flex items-center gap-2 text-zinc-400 min-w-0">
           <div className="w-4 h-4 rounded-full bg-indigo-500/30 shrink-0" />
-          <span className="text-sm">Processing: {reel.title || reel.url}...</span>
+          <span className="text-sm truncate">{reel.title || reel.url}</span>
+        </div>
+        <div className="flex items-center gap-2 mt-2">
+          <span className="text-[10px] text-zinc-600 capitalize">{reel.ingestStatus}</span>
+          <span className="text-[10px] text-zinc-600 tabular-nums">· {formatElapsed(elapsed)}</span>
+          {stuck && (
+            <span className="text-[10px] text-amber-400/90">· may be stuck</span>
+          )}
+          <button onClick={() => onDelete(reel.id)}
+            className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors min-h-[36px]"
+            title="Cancel and remove">
+            <Trash2 size={11} /> Cancel
+          </button>
         </div>
       </div>
     )

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
+import { formatElapsed } from '../utils/format'
 import { Link, AlertCircle, CheckCircle2, Video, XCircle, RotateCw, ArrowRight, Clipboard, Settings, Smartphone, Loader2 } from 'lucide-react'
 import type { ScrapeJob, JobPhase } from '../hooks/useScrapeQueue'
 
@@ -51,6 +52,18 @@ function shortUrl(url: string) {
     const parts = u.pathname.split('/').filter(Boolean)
     return parts.length >= 2 ? `/${parts[0]}/${parts[1]}` : u.pathname
   } catch { return url.slice(0, 40) }
+}
+
+const STUCK_THRESHOLDS: Record<Exclude<JobPhase, 'complete' | 'failed'>, number> = {
+  queued: 60_000,
+  scraping: 120_000,
+  analyzing: 180_000,
+}
+
+function isStuck(phase: JobPhase, elapsedMs: number | null): boolean {
+  if (elapsedMs === null) return false
+  const threshold = STUCK_THRESHOLDS[phase as keyof typeof STUCK_THRESHOLDS]
+  return typeof threshold === 'number' && elapsedMs > threshold
 }
 
 export function IngestionForm({ jobs, addJob, removeJob, apiKey, apiKeyLoading, apifyApiKey, onSwitchToLibrary, clipboardUrl, onDismissClipboard, masterUsageCount = 0, masterUsageLimit = 5, needsMasterApify = false, hasOwnApifyKey = false, canUseMasterKey = true, onGoToSettings, existingReelUrls = [] }: Props) {
@@ -277,24 +290,40 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apiKeyLoading, 
         <div className="space-y-2">
           {activeJobs.map(job => {
             const ui = phaseUI[job.phase]
+            const started = job.startedAt || job.createdAt
+            const elapsedMs = started ? Date.now() - started : null
+            const stuck = isStuck(job.phase, elapsedMs)
             return (
-              <Card key={job.id} className="p-3 flex items-center gap-3">
-                <Badge variant={ui.badgeVariant} className="shrink-0">
-                  {ui.spinning && <Loader2 size={10} className="animate-spin mr-1" />}
-                  {ui.label}
-                </Badge>
-                <span className="text-xs text-zinc-500 truncate flex-1">{shortUrl(job.url)}</span>
-                {job.phase === 'failed' && job.error && (
-                  <span className="text-[10px] text-red-400/80 max-w-[180px] truncate" title={job.error}>{job.error}</span>
-                )}
-                {job.phase === 'failed' && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { addJob(job.url); removeJob(job.id) }}>
-                    <RotateCw size={12} />
+              <Card key={job.id} className="p-3">
+                <div className="flex items-center gap-3">
+                  <Badge variant={ui.badgeVariant} className="shrink-0">
+                    {ui.spinning && <Loader2 size={10} className="animate-spin mr-1" />}
+                    {ui.label}
+                  </Badge>
+                  <span className="text-xs text-zinc-500 truncate flex-1">{shortUrl(job.url)}</span>
+                  {job.phase !== 'failed' && elapsedMs !== null && (
+                    <span className="text-[10px] text-zinc-600 tabular-nums shrink-0" title={`Running for ${formatElapsed(elapsedMs)}`}>
+                      {formatElapsed(elapsedMs)}
+                    </span>
+                  )}
+                  {job.phase === 'failed' && job.error && (
+                    <span className="text-[10px] text-red-400/80 max-w-[160px] truncate shrink-0" title={job.error}>{job.error}</span>
+                  )}
+                  {job.phase === 'failed' && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Retry" onClick={() => { addJob(job.url); removeJob(job.id) }}>
+                      <RotateCw size={12} />
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 shrink-0" title={job.phase === 'failed' ? 'Dismiss' : 'Cancel'} onClick={() => removeJob(job.id)}>
+                    <XCircle size={13} />
                   </Button>
+                </div>
+                {stuck && (
+                  <p className="mt-1.5 flex items-center gap-1 text-[10px] text-amber-400/90">
+                    <AlertCircle size={10} className="shrink-0" />
+                    Taking longer than usual — it may be stuck. You can cancel and re-add it.
+                  </p>
                 )}
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500" onClick={() => removeJob(job.id)}>
-                  <XCircle size={13} />
-                </Button>
               </Card>
             )
           })}

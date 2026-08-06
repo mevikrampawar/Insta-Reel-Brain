@@ -98,6 +98,17 @@ export async function startApifyRun(
 
 export type ApifyRunStatus = 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'ABORTED' | 'TIMED-OUT'
 
+// Aborts a running Apify actor run (frees up actor resources and stops billing).
+// Safe to call for runs that already finished — Apify ignores it.
+export async function abortApifyRun(apifyApiKey: string, runId: string): Promise<void> {
+  const token = apifyApiKey.trim()
+  try {
+    await apifyFetch(token, `actor-runs/${runId}`, 'DELETE')
+  } catch {
+    // Abort is best-effort — a missing/expired run shouldn't break the caller
+  }
+}
+
 export async function pollApifyRun(
   apifyApiKey: string,
   runId: string,

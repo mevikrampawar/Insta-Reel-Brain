@@ -4,6 +4,14 @@ export function formatCount(n: number): string {
   return String(n)
 }
 
+export function formatElapsed(ms: number): string {
+  const s = Math.floor(ms / 1000)
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  const rest = s % 60
+  return rest > 0 ? `${m}m ${rest}s` : `${m}m`
+}
+
 export function hashColor(str: string): string {
   let h = 0
   for (let i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h)
