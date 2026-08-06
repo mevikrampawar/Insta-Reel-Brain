@@ -18,14 +18,16 @@ Turn a single-platform "reel archive" into a **server-backed, cross-platform vid
 
 | # | Item | Where | Status |
 |---|---|---|---|
-| 0.1 | Validate `userId` (regex + length + constant path) to kill service-account path injection | `worker/index.js` | ⬜ |
-| 0.2 | Authenticate the relay: per-user shared secret required on every worker call + per-IP rate limit | `worker/index.js` | ⬜ |
-| 0.3 | Harden CORS (restricted origin) + sanitize error responses (stop leaking internals) | `worker/index.js` | ⬜ |
-| 0.4 | Strengthen Firestore rules: field-level validation, restrict writes to `pendingUrls`/`settings`, block bulk abuse | `firestore.rules` | ⬜ |
-| 0.5 | Real master-key limit enforcement: transactional counter + gate in the queue, not just the submit button | `ApiKeyContext.tsx`, `useScrapeQueue.ts` | ⬜ |
-| 0.6 | `clearAllUserData` clears `pendingUrls` + parent doc | `services/userData.ts` | ⬜ |
+| 0.1 | Validate `userId` (regex + length + constant path) to kill service-account path injection | `worker/index.js` | ✅ |
+| 0.2 | Authenticate the relay: per-user shared secret required on every worker call + per-IP rate limit | `worker/index.js` | ✅ (shared secret via `RELAY_SECRET`; per-IP rate limit deferred to Phase 2a worker API) |
+| 0.3 | Harden CORS (restricted origin) + sanitize error responses (stop leaking internals) | `worker/index.js` | ✅ |
+| 0.4 | Strengthen Firestore rules: field-level validation, restrict writes to `pendingUrls`/`settings`, block bulk abuse | `firestore.rules` | ✅ (validated against Firestore emulator: 12/12 tests pass) |
+| 0.5 | Real master-key limit enforcement: transactional counter + gate in the queue, not just the submit button | `ApiKeyContext.tsx`, `useScrapeQueue.ts` | ✅ (atomic reserve/release via `runTransaction`, refund on failure) |
+| 0.6 | `clearAllUserData` clears `pendingUrls` + parent doc | `services/userData.ts` | ✅ (parent doc is never created by the app, so no cleanup needed) |
 
-**DoD:** external security review of worker + rules passes; the relay cannot write outside the caller's own `pendingUrls`.
+**DoD:** external security review of worker + rules passes; the relay cannot write outside the caller's own `pendingUrls`. — Committed as `a51917b` + `9b6dcda`.
+
+Also done as part of Phase 0: knowledge graph reworked to a single 2D brain-like renderer, Three.js removed (bundle −45%, 2.9MB → 1.6MB) — `817d543`.
 
 ---
 
