@@ -15,6 +15,7 @@ export interface ScrapeJob {
   runId?: string
   datasetId?: string
   reelSource?: 'manual' | 'upload' | 'telegram' | 'ios-shortcut'
+  reelId?: string
 }
 
 const POLL_MS = 3000
@@ -184,11 +185,10 @@ export function useScrapeQueue(
         }
       }
 
-      patch(job.id, { phase: 'complete' })
+      patch(job.id, { phase: 'complete', reelId })
       // Mark URL as processed to prevent re-scraping across reloads
       setProcessedUrls(prev => new Set([...prev, job.url.trim().replace(/\/+$/, '')]))
       if (onMasterKeyUsed) onMasterKeyUsed().catch(() => {})
-      setTimeout(() => { if (mounted.current) remove(job.id) }, 5000)
       return true
     }
 
@@ -198,7 +198,7 @@ export function useScrapeQueue(
     }
 
     return false
-  }, [apifyApiKey, groqApiKey, addReel, updateReel, patch, remove, assignReelsByCategory])
+  }, [apifyApiKey, groqApiKey, addReel, updateReel, patch, assignReelsByCategory, onMasterKeyUsed])
 
   // On mount: re-start polling for persisted scraping jobs, re-queue persisted queued jobs
   useEffect(() => {

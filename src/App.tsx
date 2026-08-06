@@ -390,7 +390,7 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           apiKey={apiCtx.apiKey}
           apiKeyLoading={apiCtx.loading}
           apifyApiKey={apiCtx.apifyApiKey}
-          onSwitchToLibrary={() => handleNavChange({ tab: 'library' })}
+          onSwitchToLibrary={(reelId) => reelId ? navigateToReel(reelId) : handleNavChange({ tab: 'library' })}
           clipboardUrl={clipboardUrl}
           onDismissClipboard={() => setClipboardUrl(null)}
           masterUsageCount={apiCtx.masterUsageCount}

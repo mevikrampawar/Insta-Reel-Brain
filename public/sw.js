@@ -11,8 +11,6 @@ self.addEventListener('activate', (event) => {
 })
 
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url)
-
   // Network-first strategy for navigation
   if (event.request.mode === 'navigate') {
     event.respondWith(

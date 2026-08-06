@@ -16,7 +16,7 @@ interface Props {
   apiKey: string
   apiKeyLoading: boolean
   apifyApiKey: string
-  onSwitchToLibrary: () => void
+  onSwitchToLibrary: (reelId?: string) => void
   clipboardUrl?: string | null
   onDismissClipboard?: () => void
   masterUsageCount?: number
@@ -125,7 +125,8 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apiKeyLoading, 
   }
 
   const activeJobs = jobs.filter(j => j.phase !== 'complete')
-  const doneCount = jobs.filter(j => j.phase === 'complete').length
+  const completedJobs = jobs.filter(j => j.phase === 'complete')
+  const doneCount = completedJobs.length
 
   return (
     <div className="max-w-2xl mx-auto p-4 md:p-8 space-y-6" data-tour="ingest">
@@ -148,7 +149,7 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apiKeyLoading, 
             <p className="text-sm text-zinc-500 mt-1">Paste any Instagram reel URL</p>
           </div>
           {doneCount > 0 && (
-            <Button variant="outline" size="sm" onClick={onSwitchToLibrary} className="gap-1.5 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10">
+            <Button variant="outline" size="sm" onClick={() => onSwitchToLibrary(completedJobs[completedJobs.length - 1]?.reelId)} className="gap-1.5 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10">
               <CheckCircle2 size={14} /> Library <Badge variant="success" className="ml-1 text-[10px]">{doneCount}</Badge>
             </Button>
           )}
@@ -297,6 +298,27 @@ export function IngestionForm({ jobs, addJob, removeJob, apiKey, apiKeyLoading, 
               </Card>
             )
           })}
+        </div>
+      )}
+
+      {/* Completed jobs — kept until dismissed */}
+      {completedJobs.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Done</p>
+          {completedJobs.map(job => (
+            <Card key={job.id} className="p-3 flex items-center gap-3 border-emerald-500/20 bg-emerald-500/5">
+              <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+              <span className="text-xs text-zinc-400 truncate flex-1">{shortUrl(job.url)}</span>
+              {job.reelId && (
+                <Button variant="outline" size="sm" onClick={() => onSwitchToLibrary(job.reelId)} className="gap-1.5 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 shrink-0">
+                  <ArrowRight size={12} /> View in Library
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 shrink-0" onClick={() => removeJob(job.id)} aria-label="Dismiss">
+                <XCircle size={13} />
+              </Button>
+            </Card>
+          ))}
         </div>
       )}
 

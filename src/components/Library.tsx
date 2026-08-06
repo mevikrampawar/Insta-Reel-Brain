@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
-import { Download, BarChart3, BookOpen, Tag, XCircle, ArrowUpDown, CheckSquare, Square, Trash2, FolderPlus, RefreshCw, X, Filter, Zap, AlertTriangle } from 'lucide-react'
+import { Download, BarChart3, BookOpen, Tag, XCircle, CheckSquare, Square, Trash2, FolderPlus, RefreshCw, X, Filter, Zap, AlertTriangle } from 'lucide-react'
 import type { Reel, Collection, SearchResult } from '../types'
 import { ReelCard } from './ReelCard'
 import { SearchBar } from './SearchBar'
@@ -90,22 +90,10 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
   const [showFilters, setShowFilters] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [showSortMenu, setShowSortMenu] = useState(false)
   const [showBatchConfirm, setShowBatchConfirm] = useState<'analyze' | 'scrape' | null>(null)
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const reelRefs = useRef<Map<string, HTMLDivElement>>(new Map())
-  const sortMenuRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!showSortMenu) return
-    const handler = (e: MouseEvent) => {
-      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) setShowSortMenu(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showSortMenu])
-
-  // Apply filters from external navigation (e.g. Dashboard clicking a category)
   useEffect(() => {
     if (!libraryFilters) return
     setFilters(prev => ({
@@ -196,6 +184,11 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
   const clearFilters = useCallback(() => {
     setFilters({ status: 'all', collection: 'all', categories: [], sentiments: [], qualityMin: 0, creator: 'all', dateRange: 'all' })
   }, [])
+
+  const clearAll = useCallback(() => {
+    clearFilters()
+    setSort('newest')
+  }, [clearFilters])
 
   const toggleFilterArray = useCallback((key: 'categories' | 'sentiments', value: string) => {
     setFilters(prev => {
@@ -371,70 +364,80 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
       {/* Search */}
       <SearchBar reels={reels} onResults={setSearchResults} />
 
-      {/* Filter bar — status + sort + filter toggle */}
-      <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
-        {/* Status filters */}
-        {(['all', 'complete', 'processing', 'failed'] as const).map(f => (
-          <button key={f} onClick={() => setFilters(prev => ({ ...prev, status: f }))}
-            className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors whitespace-nowrap min-h-[40px] ${
-              filters.status === f ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'
-            }`}>
-            {f.charAt(0).toUpperCase() + f.slice(1)}
-          </button>
-        ))}
-
-        <div className="w-px h-4 bg-zinc-700 shrink-0" />
-
-        {/* Collection filter */}
-        {collections.length > 0 && (
-          <select value={filters.collection} onChange={e => setFilters(prev => ({ ...prev, collection: e.target.value }))}
-            className="bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none min-h-[40px] shrink-0">
-            <option value="all">All Collections</option>
-            {collections.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        )}
-
-        <div className="w-px h-4 bg-zinc-700 shrink-0" />
-
-        {/* Sort button */}
-        <div className="relative" ref={sortMenuRef}>
-          <button onClick={() => setShowSortMenu(!showSortMenu)}
-            className="flex items-center gap-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-zinc-400 hover:text-white transition-colors whitespace-nowrap min-h-[40px]">
-            <ArrowUpDown size={12} /> {SORT_OPTIONS.find(s => s.key === sort)?.label}
-          </button>
-          {showSortMenu && (
-            <div className="absolute top-full left-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 py-1 min-w-[140px]">
-              {SORT_OPTIONS.map(opt => (
-                <button key={opt.key} onClick={() => { setSort(opt.key); setShowSortMenu(false) }}
-                  className={`w-full text-left px-3 py-2 text-xs transition-colors ${sort === opt.key ? 'text-indigo-400 bg-indigo-500/10' : 'text-zinc-400 hover:text-white hover:bg-zinc-700'}`}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Advanced filter toggle */}
+      {/* Toolbar — single Filters affordance (progressive disclosure) */}
+      <div className="flex items-center gap-2">
         <button onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium transition-colors whitespace-nowrap min-h-[40px] border ${
-            activeFilterCount > 0 ? 'bg-indigo-600/20 border-indigo-500/30 text-indigo-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors min-h-[40px] border ${
+            showFilters || activeFilterCount > 0 ? 'bg-indigo-600/20 border-indigo-500/30 text-indigo-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
           }`}>
           <Filter size={12} /> Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
         </button>
+        {(activeFilterCount > 0 || sort !== 'newest') && (
+          <button onClick={clearAll}
+            className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs text-zinc-400 hover:text-white transition-colors min-h-[40px]">
+            <X size={12} /> Reset
+          </button>
+        )}
+        {sort !== 'newest' && (
+          <span className="text-[11px] text-zinc-600 ml-auto">Sorted: {SORT_OPTIONS.find(s => s.key === sort)?.label}</span>
+        )}
       </div>
 
-      {/* Advanced filters panel */}
+      {/* Filters panel */}
       {showFilters && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 sm:p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-xs font-medium text-zinc-400">Advanced Filters</h4>
+            <h4 className="text-xs font-medium text-zinc-400">Refine</h4>
             {activeFilterCount > 0 && (
               <button onClick={clearFilters} className="text-[11px] text-indigo-400 hover:text-indigo-300">Clear all</button>
             )}
           </div>
 
+          {/* Sort */}
+          <div>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Sort by</p>
+            <div className="flex flex-wrap gap-1.5">
+              {SORT_OPTIONS.map(opt => (
+                <button key={opt.key} onClick={() => setSort(opt.key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs transition-colors min-h-[36px] ${
+                    sort === opt.key ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                  }`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Status */}
+          <div>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Status</p>
+            <div className="flex flex-wrap gap-1.5">
+              {(['all', 'complete', 'processing', 'failed'] as const).map(f => (
+                <button key={f} onClick={() => setFilters(prev => ({ ...prev, status: f }))}
+                  className={`px-3 py-1.5 rounded-lg text-xs transition-colors min-h-[36px] ${
+                    filters.status === f ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                  }`}>
+                  {f.charAt(0).toUpperCase() + f.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Collection */}
+          {collections.length > 0 && (
+            <div>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Collection</p>
+              <select value={filters.collection} onChange={e => setFilters(prev => ({ ...prev, collection: e.target.value }))}
+                className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-400 focus:outline-none min-h-[36px] w-full">
+                <option value="all">All Collections</option>
+                {collections.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="border-t border-zinc-800 pt-3 space-y-3">
           {/* Content Category */}
           <div>
             <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Content Type</p>
@@ -507,6 +510,7 @@ export function Library({ reels, onDelete, onDeleteBulk, collections, userId, on
                 </button>
               ))}
             </div>
+          </div>
           </div>
         </div>
       )}
