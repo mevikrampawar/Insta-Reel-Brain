@@ -98,10 +98,10 @@ Grow the Cloudflare Worker into the backend. Dual-mode: new users default to ser
   | 2b.5 | Webhook route + token validation + forward to DO | `worker/index.js` | ✅ |
   | 2b.6 | Enqueue/cancel/jobs routes + credit reserve/release wiring | `worker/index.js` | ✅ |
   | 2b.7 | Retry policy (transient vs terminal), duplicate detection, job expiry | `worker/ingest-queue.js` | ✅ |
-  | 2b.8 | End-to-end test harness (curl + webhook sim) + worker logs; verify a real scrape completes via webhook | `scripts/test-ingest.mjs` | 🚧 harness done (24/24 pass); live scrape pending deploy |
+  | 2b.8 | End-to-end test harness (curl + webhook sim) + worker logs; verify a real scrape completes via webhook | `scripts/test-ingest.mjs`, `scripts/smoke-worker.sh` | 🚧 harness done (24/24 pass) + post-deploy smoke script; live scrape pending deploy |
   | 2b.9 | (stretch) Server-side intake of `pendingUrls` so the iOS Shortcut completes without the app open | `worker/index.js` | ⬜ |
 
-  **This pass:** fixed a systematic `firestoreRequest(env, url, init)` argument-order bug (present since 2a) that made every worker→Firestore write fail; fixed the harness's oauth mock, `urlKey` assertion, and Groq classifier mock. `npm run lint` + `npm run typecheck` + `npm run build` + `wrangler deploy --dry-run` all pass; `node scripts/test-ingest.mjs` → 24/24. Live deploy + real Apify→Groq→Firestore cycle deferred (needs `APIFY_API_TOKEN`/`GROQ_API_KEY` secrets).
+  **This pass:** fixed a systematic `firestoreRequest(env, url, init)` argument-order bug (present since 2a) that made every worker→Firestore write fail; fixed the harness's oauth mock, `urlKey` assertion, and Groq classifier mock; added an in-flight guard to the `IngestQueue` DO so the webhook and alarm backstop can't double-start a run or double-process a job; added `scripts/smoke-worker.sh` for post-deploy auth checks. `npm run lint` + `npm run typecheck` + `npm run build` + `wrangler deploy --dry-run` all pass; `node scripts/test-ingest.mjs` → 24/24. Live deploy + real Apify→Groq→Firestore cycle deferred (needs `APIFY_API_TOKEN`/`GROQ_API_KEY` secrets).
 
   **DoD:** `wrangler deploy` green; a real Apify→Groq→Firestore cycle completes via webhook with zero client-side scraping; cancel aborts the run and refunds the credit; duplicate URL rejected; `npm run lint` + `npm run typecheck` + `npm run build` pass (client untouched). Full client cutover to the server path is Phase **2c**.
 - **2c. Client migration** — default capture flow calls the worker; job progress streams back; BYOK path behind the toggle.

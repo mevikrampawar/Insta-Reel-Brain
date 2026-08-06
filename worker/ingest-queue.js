@@ -15,6 +15,7 @@ export class IngestQueue extends DurableObject {
     super(ctx, env)
     this.env = env
     this.ctx = ctx
+    this.inFlight = new Set()
     ctx.blockConcurrencyWhile(() => {
       this.ctx.storage.sql.exec(`
         CREATE TABLE IF NOT EXISTS jobs (
@@ -113,42 +114,54 @@ export class IngestQueue extends DurableObject {
   }
 
   async startJob(jobId) {
-    const row = this.getRow(jobId)
-    if (!row || row.status !== 'queued') return
-    await this.patchReel(row, { ingestStatus: 'scraping' })
+    if (this.inFlight.has(jobId)) return
+    this.inFlight.add(jobId)
     try {
-      const webhookUrl = this.env.WORKER_URL
-        ? `${this.env.WORKER_URL}/api/ingest/webhook?jobId=${encodeURIComponent(row.jobId)}&token=${encodeURIComponent(row.webhookToken)}&uid=${encodeURIComponent(row.uid)}`
-        : null
-      const { runId, datasetId } = await startApifyRun(this.env, row.url, webhookUrl)
-      this.updateRow(jobId, { runId, datasetId, status: 'running', phase: 'process', attempts: 0, updatedAt: Date.now() })
-      await this.patchJobDoc(row, { status: 'running', runId, datasetId, updatedAt: Date.now() })
-      await this.scheduleBackstop()
-    } catch (e) {
-      await this.failTransient(jobId, e)
+      const row = this.getRow(jobId)
+      if (!row || row.status !== 'queued') return
+      await this.patchReel(row, { ingestStatus: 'scraping' })
+      try {
+        const webhookUrl = this.env.WORKER_URL
+          ? `${this.env.WORKER_URL}/api/ingest/webhook?jobId=${encodeURIComponent(row.jobId)}&token=${encodeURIComponent(row.webhookToken)}&uid=${encodeURIComponent(row.uid)}`
+          : null
+        const { runId, datasetId } = await startApifyRun(this.env, row.url, webhookUrl)
+        this.updateRow(jobId, { runId, datasetId, status: 'running', phase: 'process', attempts: 0, updatedAt: Date.now() })
+        await this.patchJobDoc(row, { status: 'running', runId, datasetId, updatedAt: Date.now() })
+        await this.scheduleBackstop()
+      } catch (e) {
+        await this.failTransient(jobId, e)
+      }
+    } finally {
+      this.inFlight.delete(jobId)
     }
   }
 
   async processJob(jobId) {
-    const row = this.getRow(jobId)
-    if (!row || TERMINAL.includes(row.status)) return
-    this.updateRow(jobId, { status: 'analyzing', updatedAt: Date.now() })
-    await this.patchJobDoc(row, { status: 'analyzing', updatedAt: Date.now() })
-    await this.patchReel(row, { ingestStatus: 'analyzing' })
+    if (this.inFlight.has(jobId)) return
+    this.inFlight.add(jobId)
     try {
-      const fields = await processApifyRun(this.env, {
-        uid: row.uid,
-        url: row.url,
-        source: row.source,
-        datasetId: row.datasetId,
-      })
-      await updateReelDoc(this.env, row.uid, row.reelId, fields)
-      this.updateRow(jobId, { status: 'complete', updatedAt: Date.now() })
-      await this.patchJobDoc(row, { status: 'complete', reelId: row.reelId, updatedAt: Date.now() })
-      this.deleteRow(jobId)
-      await this.scheduleBackstop()
-    } catch (e) {
-      await this.failTransient(jobId, e)
+      const row = this.getRow(jobId)
+      if (!row || TERMINAL.includes(row.status)) return
+      this.updateRow(jobId, { status: 'analyzing', updatedAt: Date.now() })
+      await this.patchJobDoc(row, { status: 'analyzing', updatedAt: Date.now() })
+      await this.patchReel(row, { ingestStatus: 'analyzing' })
+      try {
+        const fields = await processApifyRun(this.env, {
+          uid: row.uid,
+          url: row.url,
+          source: row.source,
+          datasetId: row.datasetId,
+        })
+        await updateReelDoc(this.env, row.uid, row.reelId, fields)
+        this.updateRow(jobId, { status: 'complete', updatedAt: Date.now() })
+        await this.patchJobDoc(row, { status: 'complete', reelId: row.reelId, updatedAt: Date.now() })
+        this.deleteRow(jobId)
+        await this.scheduleBackstop()
+      } catch (e) {
+        await this.failTransient(jobId, e)
+      }
+    } finally {
+      this.inFlight.delete(jobId)
     }
   }
 
