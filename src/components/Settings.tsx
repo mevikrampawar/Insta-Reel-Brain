@@ -437,6 +437,9 @@ export function Settings({ userId }: Props) {
                   {copiedRelayJson ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} className="text-amber-300" />}
                 </button>
               </div>
+              <p className="text-[10px] text-zinc-500 mt-1">
+                Also add a <code className="text-zinc-400">X-Relay-Secret</code> header = the <code className="text-zinc-400">RELAY_SECRET</code> you set in Cloudflare. Requests without it are rejected.
+              </p>
             </div>
           </div>
         )}

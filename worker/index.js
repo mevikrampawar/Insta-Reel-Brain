@@ -5,9 +5,13 @@
 // 1. Create a Firebase service account (Project Settings > Service Accounts > Generate New Private Key)
 // 2. In Cloudflare dashboard: Workers & Pages > reel-brain-relay > Edit Code
 // 3. Paste this script and deploy
-// 4. Add secrets via Settings > Variables: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
-//    FIREBASE_PRIVATE_KEY can be stored as raw PEM (with newlines) OR base64-encoded PEM
+// 4. Add secrets via Settings > Variables:
+//    FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
+//      FIREBASE_PRIVATE_KEY can be stored as raw PEM (with newlines) OR base64-encoded PEM
+//    RELAY_SECRET — a shared secret the iOS Shortcut must send as `X-Relay-Secret`.
+//      Generate with: `openssl rand -hex 32`. Requests without it are rejected (401).
 // 5. Update the iOS Shortcut to POST to: https://reel-brain-relay.YOUR_SUBDOMAIN.workers.dev
+//    with header `X-Relay-Secret: <RELAY_SECRET>` and JSON body { url, userId }
 
 export default {
   async fetch(request, env) {
@@ -18,6 +22,14 @@ export default {
     if (request.method !== 'POST') {
       return new Response(JSON.stringify({ error: 'Method not allowed' }), {
         status: 405,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+      })
+    }
+
+    if (!isAuthorized(request, env)) {
+      console.warn('Relay rejected: missing or invalid X-Relay-Secret')
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
         headers: { 'Content-Type': 'application/json', ...corsHeaders() },
       })
     }
@@ -45,6 +57,13 @@ export default {
         })
       }
 
+      if (!/^[A-Za-z0-9_-]{6,128}$/.test(userId)) {
+        return new Response(JSON.stringify({ error: 'Invalid userId' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+        })
+      }
+
       if (!/^https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p)\/[\w-]+/.test(url)) {
         return new Response(JSON.stringify({ error: 'Not a valid Instagram reel URL' }), {
           status: 400,
@@ -54,7 +73,7 @@ export default {
 
       const timestamp = Date.now()
       const docId = `pending_${timestamp}_${Math.random().toString(36).slice(2, 8)}`
-      const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/users/${userId}/pendingUrls/${docId}`
+      const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/databases/(default)/documents/users/${encodeURIComponent(userId)}/pendingUrls/${encodeURIComponent(docId)}`
 
       const token = await getAccessToken(env)
       if (!token) {
@@ -93,9 +112,9 @@ export default {
         headers: { 'Content-Type': 'application/json', ...corsHeaders() },
       })
     } catch (e) {
-      console.error('Relay error:', e.message)
-      return new Response(JSON.stringify({ error: 'Invalid request', detail: e.message }), {
-        status: 400,
+      console.error('Relay error:', e)
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        status: 500,
         headers: { 'Content-Type': 'application/json', ...corsHeaders() },
       })
     }
@@ -104,10 +123,25 @@ export default {
 
 function corsHeaders() {
   return {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': 'https://mevikrampawar.github.io',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Relay-Secret',
   }
+}
+
+function isAuthorized(request, env) {
+  const expected = env.RELAY_SECRET
+  if (!expected) return false
+  const provided = request.headers.get('X-Relay-Secret')
+  if (!provided) return false
+  return secureCompare(provided, expected)
+}
+
+function secureCompare(a, b) {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
 }
 
 // ---- JWT / Service Account Auth ----
