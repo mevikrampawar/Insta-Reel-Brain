@@ -6,6 +6,10 @@
 //   GET  /api/me                  — verify a Firebase ID token, return user info
 //   POST /api/usage/reserve       — atomically reserve one free-tier credit
 //   POST /api/usage/release       — atomically release one free-tier credit
+//   POST /api/ingest/enqueue      — start server-side ingestion (Apify→Groq→Firestore)
+//   POST /api/ingest/webhook      — Apify run-finished callback (token-authenticated)
+//   POST /api/ingest/cancel       — cancel an in-progress ingest job
+//   GET  /api/ingest/jobs         — list in-progress ingest jobs
 //
 // SETUP:
 // 1. Create a Firebase service account (Project Settings > Service Accounts > Generate New Private Key)
@@ -13,10 +17,13 @@
 //    FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
 //      FIREBASE_PRIVATE_KEY can be stored as raw PEM (with newlines) OR base64-encoded PEM
 //    RELAY_SECRET — shared secret for the iOS Shortcut (`openssl rand -hex 32`).
+//    APIFY_API_TOKEN, GROQ_API_KEY — provider keys for server-side ingestion (Phase 2b).
 // 3. Bind a KV namespace (RATE_LIMIT_KV) for per-user/per-IP rate limiting.
 // 4. Optional var FREE_REEL_LIMIT (default 5) — free-tier credit cap.
 // 5. Update the iOS Shortcut to POST to: https://reel-brain-relay.YOUR_SUBDOMAIN.workers.dev
 //    with header `X-Relay-Secret: <RELAY_SECRET>` and JSON body { url, userId }
+//
+// Local dev: copy the secrets into a gitignored `.dev.vars` file (see `.dev.vars.example`).
 
 import { verifyIdToken } from './auth'
 import {

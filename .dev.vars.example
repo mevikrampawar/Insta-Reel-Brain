@@ -1,0 +1,8 @@
+# Local dev secrets for the Cloudflare Worker (wrangler dev). Gitignored.
+# Copy to `.dev.vars` and fill in. Never commit real secrets.
+FIREBASE_PROJECT_ID=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY=
+RELAY_SECRET=
+APIFY_API_TOKEN=
+GROQ_API_KEY=
