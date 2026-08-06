@@ -6,7 +6,7 @@ import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore'
  * This is irreversible. Requires re-authentication before calling.
  */
 export async function clearAllUserData(userId: string): Promise<{ deleted: number }> {
-  const subcollections = ['reels', 'collections', 'notes'] as const
+  const subcollections = ['reels', 'collections', 'notes', 'pendingUrls'] as const
   let totalDeleted = 0
 
   // Delete all documents in each subcollection

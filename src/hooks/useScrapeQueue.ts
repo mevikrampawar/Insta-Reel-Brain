@@ -17,6 +17,7 @@ export interface ScrapeJob {
   datasetId?: string
   reelSource?: 'manual' | 'upload' | 'telegram' | 'ios-shortcut'
   reelId?: string
+  reservedMaster?: boolean
   createdAt: number
   startedAt?: number
   updatedAt: number
@@ -63,6 +64,7 @@ function serializeJob(job: ScrapeJob): ScrapeJob {
     datasetId: job.datasetId,
     reelSource: job.reelSource,
     reelId: job.reelId,
+    reservedMaster: job.reservedMaster,
     createdAt: job.createdAt,
     startedAt: job.startedAt,
     updatedAt: job.updatedAt,
@@ -103,25 +105,42 @@ function persistJobs(jobs: ScrapeJob[]) {
   } catch { /* ignore quota errors */ }
 }
 
+export type AddJobResult = 'added' | 'duplicate' | 'limit-reached' | 'invalid'
+
+export interface MasterKeyGate {
+  canUse: boolean
+  reserve: () => Promise<boolean>
+  release: () => Promise<void>
+}
+
 export function useScrapeQueue(
   apifyApiKey: string,
   groqApiKey: string,
   addReel: (data: Partial<Reel>) => Promise<string | undefined>,
   updateReel: (id: string, data: Partial<Reel>) => Promise<void>,
   assignReelsByCategory?: (reels: { id: string; primaryCategory?: string }[]) => Promise<{ processed: number; assigned: number }>,
-  onMasterKeyUsed?: () => Promise<void>,
+  masterKeyGate?: MasterKeyGate,
 ) {
   const [jobs, setJobs] = useState<ScrapeJob[]>(loadPersistedJobs)
   const [processedUrls, setProcessedUrls] = useState<Set<string>>(loadProcessedUrls)
   const mounted = useRef(true)
   const polling = useRef<Set<string>>(new Set())
   const cancelled = useRef<Set<string>>(new Set())
+  const released = useRef<Set<string>>(new Set())
   const jobsRef = useRef<ScrapeJob[]>(jobs)
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
 
   // Keep a live ref so callbacks (addJob, removeJob) never read stale state
   useEffect(() => { jobsRef.current = jobs }, [jobs])
+
+  // Refund a reserved master-key slot at most once per job
+  const releaseIfReserved = useCallback((job: ScrapeJob) => {
+    if (!job.reservedMaster || job.phase === 'complete') return
+    if (released.current.has(job.id)) return
+    released.current.add(job.id)
+    masterKeyGate?.release().catch(() => {})
+  }, [masterKeyGate])
 
   // Persist jobs to localStorage whenever they change
   useEffect(() => { persistJobs(jobs) }, [jobs])
@@ -149,15 +168,28 @@ export function useScrapeQueue(
     if (job?.phase === 'analyzing' && job.reelId) {
       updateReel(job.reelId, { ingestStatus: 'failed', errorMessage: 'Cancelled by user' }).catch(() => {})
     }
+    if (job) releaseIfReserved(job)
     setJobs(prev => prev.filter(j => j.id !== id))
-  }, [apifyApiKey, updateReel])
+  }, [apifyApiKey, updateReel, releaseIfReserved])
 
   const processJob = useCallback(async (job: ScrapeJob) => {
     // Guard against duplicate processing while a loop is already active
     if (polling.current.has(job.id)) return
     polling.current.add(job.id)
     let current = job
+    let completed = false
     try {
+      // ── 0) Reserve a master-key slot (atomic) before spending API credits ─
+      if (masterKeyGate && !current.reservedMaster) {
+        const ok = await masterKeyGate.reserve()
+        if (!ok) {
+          failJob(current.id, 'Free trial limit reached — add your own Apify API key in Settings to keep saving reels')
+          return
+        }
+        current = { ...current, reservedMaster: true }
+        patch(current.id, { reservedMaster: true })
+      }
+
       // ── 1) Start the Apify run if it hasn't started yet ──────────────────
       if (!current.runId && apifyApiKey) {
         const startedAt = Date.now()
@@ -340,7 +372,7 @@ export function useScrapeQueue(
         patch(current.id, { phase: 'complete', reelId: current.reelId })
         // Mark URL as processed to prevent re-scraping across reloads
         setProcessedUrls(prev => new Set([...prev, normalizeUrl(current.url)]))
-        if (onMasterKeyUsed) onMasterKeyUsed().catch(() => {})
+        completed = true
       }
     } catch (e) {
       if (mounted.current && !cancelled.current.has(job.id)) {
@@ -348,8 +380,9 @@ export function useScrapeQueue(
       }
     } finally {
       polling.current.delete(job.id)
+      if (!completed && current.reservedMaster) releaseIfReserved(current)
     }
-  }, [apifyApiKey, groqApiKey, addReel, updateReel, patch, failJob, assignReelsByCategory, onMasterKeyUsed])
+  }, [apifyApiKey, groqApiKey, addReel, updateReel, patch, failJob, assignReelsByCategory, masterKeyGate, releaseIfReserved])
 
   // On mount / key change: resume in-progress jobs, clean up stale ones
   useEffect(() => {
@@ -365,6 +398,7 @@ export function useScrapeQueue(
         if (job.reelId) {
           updateReel(job.reelId, { ingestStatus: 'failed', errorMessage: 'Processing interrupted — re-run to retry' }).catch(() => {})
         }
+        releaseIfReserved(job)
         failJob(job.id, 'Timed out — interrupted (retry to restart)')
         continue
       }
@@ -372,12 +406,14 @@ export function useScrapeQueue(
       // Wait for the Apify key before starting; fail if it never arrives
       if (job.phase === 'queued' && !job.runId && !apifyApiKey) {
         if (age > QUEUED_TIMEOUT_MS) {
+          releaseIfReserved(job)
           failJob(job.id, 'Timed out waiting to start (no Apify API key)')
         }
         continue
       }
 
       if (job.phase === 'analyzing' && !job.reelId) {
+        releaseIfReserved(job)
         failJob(job.id, 'Analysis interrupted — add this reel again')
         continue
       }
@@ -387,13 +423,13 @@ export function useScrapeQueue(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, apifyApiKey])
 
-  const addJob = useCallback(async (url: string, source?: 'manual' | 'upload' | 'telegram' | 'ios-shortcut') => {
+  const addJob = useCallback(async (url: string, source?: 'manual' | 'upload' | 'telegram' | 'ios-shortcut'): Promise<AddJobResult> => {
     // Normalize for dedup
     const normalized = normalizeUrl(url)
 
     // Check persistent processed set — prevents re-scraping across reloads
     for (const pu of processedUrls) {
-      if (normalized.includes(pu) || pu.includes(normalized)) return
+      if (normalized.includes(pu) || pu.includes(normalized)) return 'duplicate'
     }
 
     // Check in-progress queue (live state via ref to avoid stale closures)
@@ -401,13 +437,17 @@ export function useScrapeQueue(
       const jNorm = normalizeUrl(j.url)
       return (jNorm === normalized || normalized.includes(jNorm) || jNorm.includes(normalized)) && j.phase !== 'failed'
     })
-    if (exists) return
+    if (exists) return 'duplicate'
+
+    // Don't queue master-key jobs when the free trial is used up
+    if (masterKeyGate && !masterKeyGate.canUse) return 'limit-reached'
 
     const id = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const now = Date.now()
 
     setJobs(prev => [...prev, { id, url, phase: 'queued', reelSource: source, createdAt: now, updatedAt: now }])
-  }, [processedUrls])
+    return 'added'
+  }, [processedUrls, masterKeyGate])
 
   return { jobs, addJob, removeJob }
 }

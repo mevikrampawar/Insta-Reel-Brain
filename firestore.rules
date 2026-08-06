@@ -3,8 +3,68 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Users can only access their own data
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // ---- settings/preferences (API keys, usage counters) ----
+    // Only the known scalar fields may be stored.
+    match /users/{userId}/settings/preferences {
+      allow read, delete: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && (!('groqApiKey' in request.resource.data) || request.resource.data.groqApiKey is string)
+        && (!('apifyApiKey' in request.resource.data) || request.resource.data.apifyApiKey is string)
+        && (!('masterKeyUsage' in request.resource.data) || request.resource.data.masterKeyUsage is number)
+        && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is number);
+    }
+
+    // ---- notes ----
+    match /users/{userId}/notes/{noteId} {
+      allow read, delete: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid)
+        && (!('createdAt' in request.resource.data) || request.resource.data.createdAt is number)
+        && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is number)
+        && (!('content' in request.resource.data) || request.resource.data.content is string)
+        && (!('reelId' in request.resource.data) || request.resource.data.reelId is string);
+    }
+
+    // ---- collections ----
+    match /users/{userId}/collections/{collectionId} {
+      allow read, delete: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid)
+        && (!('name' in request.resource.data) || request.resource.data.name is string)
+        && (!('description' in request.resource.data) || request.resource.data.description is string)
+        && (!('color' in request.resource.data) || request.resource.data.color is string)
+        && (!('reelIds' in request.resource.data) || request.resource.data.reelIds is list)
+        && (!('isAuto' in request.resource.data) || request.resource.data.isAuto is bool)
+        && (!('createdAt' in request.resource.data) || request.resource.data.createdAt is number);
+    }
+
+    // ---- pendingUrls (background relay queue) ----
+    // Created only by the Cloudflare Worker (service account, bypasses rules).
+    // Users may read and clean up their own entries, but not forge new ones.
+    match /users/{userId}/pendingUrls/{pendingId} {
+      allow read, delete: if isOwner(userId);
+      allow create, update: if false;
+    }
+
+    // ---- reels ----
+    // Light validation on the core invariants; the analysis payload is large
+    // and written wholesale by the ingest pipeline.
+    match /users/{userId}/reels/{reelId} {
+      allow read, delete: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid)
+        && (!('ingestStatus' in request.resource.data) || request.resource.data.ingestStatus is string)
+        && (!('createdAt' in request.resource.data) || request.resource.data.createdAt is number)
+        && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is number);
+    }
+
+    // Unknown subcollections under a user: deny
     match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if false;
     }
 
     // Deny everything else

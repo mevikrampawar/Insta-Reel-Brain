@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { db } from '../services/firebase'
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore'
+import { doc, runTransaction, onSnapshot } from 'firebase/firestore'
 import { MASTER_GROQ_KEY, MASTER_APIFY_KEY, FREE_REEL_LIMIT } from '../config/masterKeys'
 
 interface ApiKeyContextType {
@@ -15,7 +15,8 @@ interface ApiKeyContextType {
   isUsingMasterApify: boolean
   canUseMasterKey: boolean
   needsMasterApify: boolean
-  incrementMasterUsage: () => Promise<void>
+  reserveMasterUsage: () => Promise<boolean>
+  releaseMasterUsage: () => Promise<void>
 }
 
 const ApiKeyContext = createContext<ApiKeyContextType>({
@@ -24,7 +25,8 @@ const ApiKeyContext = createContext<ApiKeyContextType>({
   masterUsageCount: 0, masterUsageLimit: FREE_REEL_LIMIT,
   isUsingMasterGroq: false, isUsingMasterApify: false,
   canUseMasterKey: true, needsMasterApify: false,
-  incrementMasterUsage: async () => {},
+  reserveMasterUsage: async () => true,
+  releaseMasterUsage: async () => {},
 })
 
 export function ApiKeyProvider({ userId, children }: { userId: string; children: ReactNode }) {
@@ -67,15 +69,36 @@ export function ApiKeyProvider({ userId, children }: { userId: string; children:
     return unsub
   }, [userId])
 
-  const incrementMasterUsage = useCallback(async () => {
+  const reserveMasterUsage = useCallback(async (): Promise<boolean> => {
     try {
-      const snap = await getDoc(doc(db, 'users', userId, 'settings', 'preferences'))
-      const data = snap.exists() ? snap.data() : {}
-      await setDoc(doc(db, 'users', userId, 'settings', 'preferences'), {
-        ...data,
-        masterKeyUsage: (data.masterKeyUsage || 0) + 1,
+      return await runTransaction(db, async txn => {
+        const ref = doc(db, 'users', userId, 'settings', 'preferences')
+        const snap = await txn.get(ref)
+        if (!snap.exists()) {
+          txn.set(ref, { groqApiKey: '', apifyApiKey: '', masterKeyUsage: 1, updatedAt: Date.now() })
+          return true
+        }
+        const current = snap.data().masterKeyUsage || 0
+        if (current >= FREE_REEL_LIMIT) return false
+        txn.update(ref, { masterKeyUsage: current + 1 })
+        return true
       })
-      setMasterUsageCount(prev => prev + 1)
+    } catch {
+      // Best-effort tracking
+      return false
+    }
+  }, [userId])
+
+  const releaseMasterUsage = useCallback(async () => {
+    try {
+      await runTransaction(db, async txn => {
+        const ref = doc(db, 'users', userId, 'settings', 'preferences')
+        const snap = await txn.get(ref)
+        if (!snap.exists()) return
+        const current = snap.data().masterKeyUsage || 0
+        if (current <= 0) return
+        txn.update(ref, { masterKeyUsage: current - 1 })
+      })
     } catch {
       // Best-effort tracking
     }
@@ -92,7 +115,7 @@ export function ApiKeyProvider({ userId, children }: { userId: string; children:
       hasOwnGroqKey, hasOwnApifyKey,
       masterUsageCount, masterUsageLimit: FREE_REEL_LIMIT,
       isUsingMasterGroq, isUsingMasterApify,
-      canUseMasterKey, needsMasterApify, incrementMasterUsage,
+      canUseMasterKey, needsMasterApify, reserveMasterUsage, releaseMasterUsage,
     }}>
       {children}
     </ApiKeyContext.Provider>

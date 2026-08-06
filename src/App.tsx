@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useAuth } from './hooks/useAuth'
 import { useReels } from './hooks/useReels'
 import { useCollections } from './hooks/useCollections'
@@ -42,7 +42,11 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
   const { reels, loading: reelsLoading, addReel, updateReel, deleteReel, deleteReelsBulk } = useReels(user.uid)
   const { collections, addCollection, deleteCollection, renameCollection, addReelToCollection, removeReelFromCollection, batchDeleteCollections, batchMergeCollections, assignReelsByCategory } = useCollections(user.uid)
   const apiCtx = useApiKey()
-  const { jobs, addJob, removeJob } = useScrapeQueue(apiCtx.apifyApiKey, apiCtx.apiKey, addReel, updateReel, assignReelsByCategory, apiCtx.needsMasterApify && apiCtx.canUseMasterKey ? apiCtx.incrementMasterUsage : undefined)
+  const masterKeyGate = useMemo(() => apiCtx.needsMasterApify
+    ? { canUse: apiCtx.canUseMasterKey, reserve: apiCtx.reserveMasterUsage, release: apiCtx.releaseMasterUsage }
+    : undefined,
+    [apiCtx.needsMasterApify, apiCtx.canUseMasterKey, apiCtx.reserveMasterUsage, apiCtx.releaseMasterUsage])
+  const { jobs, addJob, removeJob } = useScrapeQueue(apiCtx.apifyApiKey, apiCtx.apiKey, addReel, updateReel, assignReelsByCategory, masterKeyGate)
   const batch = useBatchProcess()
   const [nav, setNav] = useState<NavState>({ tab: getInitialTab() })
   const [clipboardUrl, setClipboardUrl] = useState<string | null>(null)
@@ -118,9 +122,12 @@ function Dashboard({ user, logout }: { user: NonNullable<ReturnType<typeof useAu
           }
 
           // addJob has built-in dedup against processed URLs and in-progress queue
-          addJob(url, (data.source as 'ios-shortcut') || 'ios-shortcut')
-          // Clean up the pending URL document
-          deleteDoc(doc(db, 'users', user.uid, 'pendingUrls', change.doc.id)).catch(() => {})
+          // Keep the pending doc when the free trial is exhausted so it retries next open
+          addJob(url, (data.source as 'ios-shortcut') || 'ios-shortcut').then(result => {
+            if (result !== 'limit-reached') {
+              deleteDoc(doc(db, 'users', user.uid, 'pendingUrls', change.doc.id)).catch(() => {})
+            }
+          })
         }
       }
     }, () => { /* listener error — non-fatal */ })
