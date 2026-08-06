@@ -2,5 +2,11 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "reel-brain-relay",
   "main": "worker/index.js",
-  "compatibility_date": "2026-07-28"
+  "compatibility_date": "2026-07-28",
+  "vars": {
+    "FREE_REEL_LIMIT": 5
+  },
+  "kv_namespaces": [
+    { "binding": "RATE_LIMIT_KV", "id": "a4822dda77a0431c9515ed60b20f0c97" }
+  ]
 }

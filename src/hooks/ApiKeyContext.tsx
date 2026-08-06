@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { db } from '../services/firebase'
 import { doc, runTransaction, onSnapshot } from 'firebase/firestore'
 import { MASTER_GROQ_KEY, MASTER_APIFY_KEY, FREE_REEL_LIMIT } from '../config/masterKeys'
+import { RELAY_BASE_URL } from '../config/relay'
+import { reserveCredit, releaseCredit } from '../services/relay'
 
 interface ApiKeyContextType {
   apiKey: string
@@ -70,17 +72,28 @@ export function ApiKeyProvider({ userId, children }: { userId: string; children:
   }, [userId])
 
   const reserveMasterUsage = useCallback(async (): Promise<boolean> => {
+    if (RELAY_BASE_URL) {
+      try {
+        const result = await reserveCredit()
+        setMasterUsageCount(result.count)
+        return result.ok
+      } catch {
+        // Worker unreachable/not configured for this feature — fall back to client-side ledger
+      }
+    }
     try {
       return await runTransaction(db, async txn => {
         const ref = doc(db, 'users', userId, 'settings', 'preferences')
         const snap = await txn.get(ref)
         if (!snap.exists()) {
           txn.set(ref, { groqApiKey: '', apifyApiKey: '', masterKeyUsage: 1, updatedAt: Date.now() })
+          setMasterUsageCount(1)
           return true
         }
         const current = snap.data().masterKeyUsage || 0
         if (current >= FREE_REEL_LIMIT) return false
         txn.update(ref, { masterKeyUsage: current + 1 })
+        setMasterUsageCount(current + 1)
         return true
       })
     } catch {
@@ -90,6 +103,15 @@ export function ApiKeyProvider({ userId, children }: { userId: string; children:
   }, [userId])
 
   const releaseMasterUsage = useCallback(async () => {
+    if (RELAY_BASE_URL) {
+      try {
+        const result = await releaseCredit()
+        setMasterUsageCount(result.count)
+        return
+      } catch {
+        // Worker unreachable/not configured for this feature — fall back to client-side ledger
+      }
+    }
     try {
       await runTransaction(db, async txn => {
         const ref = doc(db, 'users', userId, 'settings', 'preferences')
@@ -98,6 +120,7 @@ export function ApiKeyProvider({ userId, children }: { userId: string; children:
         const current = snap.data().masterKeyUsage || 0
         if (current <= 0) return
         txn.update(ref, { masterKeyUsage: current - 1 })
+        setMasterUsageCount(current - 1)
       })
     } catch {
       // Best-effort tracking

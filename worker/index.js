@@ -1,132 +1,177 @@
-// Cloudflare Worker: background relay for iOS Shortcut
-// Receives reel URLs and writes them to Firestore without opening a browser
+// Cloudflare Worker: background relay + thin server layer for Reel Brain.
+//
+// Routes:
+//   POST / or /api/relay          — save a reel URL to pendingUrls
+//                                    (auth: X-Relay-Secret header OR Bearer Firebase ID token)
+//   GET  /api/me                  — verify a Firebase ID token, return user info
+//   POST /api/usage/reserve       — atomically reserve one free-tier credit
+//   POST /api/usage/release       — atomically release one free-tier credit
 //
 // SETUP:
 // 1. Create a Firebase service account (Project Settings > Service Accounts > Generate New Private Key)
-// 2. In Cloudflare dashboard: Workers & Pages > reel-brain-relay > Edit Code
-// 3. Paste this script and deploy
-// 4. Add secrets via Settings > Variables:
+// 2. Secrets (Settings > Variables > Secrets):
 //    FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
 //      FIREBASE_PRIVATE_KEY can be stored as raw PEM (with newlines) OR base64-encoded PEM
-//    RELAY_SECRET — a shared secret the iOS Shortcut must send as `X-Relay-Secret`.
-//      Generate with: `openssl rand -hex 32`. Requests without it are rejected (401).
+//    RELAY_SECRET — shared secret for the iOS Shortcut (`openssl rand -hex 32`).
+// 3. Bind a KV namespace (RATE_LIMIT_KV) for per-user/per-IP rate limiting.
+// 4. Optional var FREE_REEL_LIMIT (default 5) — free-tier credit cap.
 // 5. Update the iOS Shortcut to POST to: https://reel-brain-relay.YOUR_SUBDOMAIN.workers.dev
 //    with header `X-Relay-Secret: <RELAY_SECRET>` and JSON body { url, userId }
 
+import { verifyIdToken } from './auth'
+import { writePendingUrl, reserveMasterCredit, releaseMasterCredit } from './firestore'
+import { rateLimit } from './ratelimit'
+
+const WINDOW_MS = 60 * 1000
+const RELAY_IP_LIMIT = 30
+const API_USER_LIMIT = 120
+const DEFAULT_FREE_REEL_LIMIT = 5
+
 export default {
   async fetch(request, env) {
+    const cors = corsHeaders()
+
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders() })
+      return new Response(null, { status: 204, headers: cors })
     }
 
-    if (request.method !== 'POST') {
-      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-        status: 405,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders() },
-      })
+    const url = new URL(request.url)
+
+    if (url.pathname === '/api/me') {
+      return handleMe(request, env, cors)
+    }
+    if (url.pathname === '/api/usage/reserve') {
+      return handleReserve(request, env, cors)
+    }
+    if (url.pathname === '/api/usage/release') {
+      return handleRelease(request, env, cors)
+    }
+    if (url.pathname === '/api/relay' || url.pathname === '/') {
+      return handleRelay(request, env, cors)
     }
 
-    if (!isAuthorized(request, env)) {
-      console.warn('Relay rejected: missing or invalid X-Relay-Secret')
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders() },
-      })
-    }
-
-    try {
-      const bodyText = await request.text()
-      let url, userId
-
-      try {
-        const parsed = JSON.parse(bodyText)
-        url = parsed.url
-        userId = parsed.userId
-      } catch {
-        const params = new URLSearchParams(bodyText)
-        url = params.get('url')
-        userId = params.get('userId')
-      }
-
-      console.log('Relay received:', { url: url?.slice(0, 80), userId: userId?.slice(0, 20), bodyLen: bodyText.length })
-
-      if (!url || !userId) {
-        return new Response(JSON.stringify({ error: 'Missing url or userId' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders() },
-        })
-      }
-
-      if (!/^[A-Za-z0-9_-]{6,128}$/.test(userId)) {
-        return new Response(JSON.stringify({ error: 'Invalid userId' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders() },
-        })
-      }
-
-      if (!/^https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p)\/[\w-]+/.test(url)) {
-        return new Response(JSON.stringify({ error: 'Not a valid Instagram reel URL' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders() },
-        })
-      }
-
-      const timestamp = Date.now()
-      const docId = `pending_${timestamp}_${Math.random().toString(36).slice(2, 8)}`
-      const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/databases/(default)/documents/users/${encodeURIComponent(userId)}/pendingUrls/${encodeURIComponent(docId)}`
-
-      const token = await getAccessToken(env)
-      if (!token) {
-        return new Response(JSON.stringify({ error: 'Failed to get access token' }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders() },
-        })
-      }
-
-      const res = await fetch(firestoreUrl, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          fields: {
-            url: { stringValue: url },
-            createdAt: { integerValue: String(timestamp) },
-            source: { stringValue: 'ios-shortcut' },
-          },
-        }),
-      })
-
-      if (!res.ok) {
-        const err = await res.text()
-        console.error('Firestore write failed:', err)
-        return new Response(JSON.stringify({ error: 'Failed to save URL' }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders() },
-        })
-      }
-
-      return new Response(JSON.stringify({ ok: true, message: 'URL saved. Open Reel Brain to see it processing.' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders() },
-      })
-    } catch (e) {
-      console.error('Relay error:', e)
-      return new Response(JSON.stringify({ error: 'Internal server error' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders() },
-      })
-    }
+    return json({ error: 'Not found' }, 404, cors)
   },
 }
 
-function corsHeaders() {
-  return {
-    'Access-Control-Allow-Origin': 'https://mevikrampawar.github.io',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Relay-Secret',
+// ---- Handlers ----
+
+async function handleMe(request, env, cors) {
+  if (request.method !== 'GET') return methodNotAllowed(cors)
+  const principal = await authenticate(request, env)
+  if (!principal) return unauthorized(cors)
+
+  const rl = await rateLimit(env, `uid:${principal.uid}`, API_USER_LIMIT, WINDOW_MS)
+  if (rl.limited) return rateLimited(cors, rl)
+
+  return json({ ok: true, uid: principal.uid, email: principal.email, name: principal.name }, 200, cors)
+}
+
+async function handleReserve(request, env, cors) {
+  if (request.method !== 'POST') return methodNotAllowed(cors)
+  const principal = await authenticate(request, env)
+  if (!principal) return unauthorized(cors)
+
+  const rl = await rateLimit(env, `uid:${principal.uid}`, API_USER_LIMIT, WINDOW_MS)
+  if (rl.limited) return rateLimited(cors, rl)
+
+  const limit = Number(env.FREE_REEL_LIMIT || DEFAULT_FREE_REEL_LIMIT) || DEFAULT_FREE_REEL_LIMIT
+  try {
+    const result = await reserveMasterCredit(env, principal.uid, limit)
+    return json({
+      ok: result.ok,
+      count: result.count,
+      limit: result.limit,
+      limitReached: !!result.limitReached,
+    }, 200, cors)
+  } catch (e) {
+    console.error('Reserve credit failed:', e)
+    return json({ error: 'Failed to reserve credit' }, 500, cors)
   }
+}
+
+async function handleRelease(request, env, cors) {
+  if (request.method !== 'POST') return methodNotAllowed(cors)
+  const principal = await authenticate(request, env)
+  if (!principal) return unauthorized(cors)
+
+  const rl = await rateLimit(env, `uid:${principal.uid}`, API_USER_LIMIT, WINDOW_MS)
+  if (rl.limited) return rateLimited(cors, rl)
+
+  try {
+    const result = await releaseMasterCredit(env, principal.uid)
+    return json({ ok: result.ok, count: result.count }, 200, cors)
+  } catch (e) {
+    console.error('Release credit failed:', e)
+    return json({ error: 'Failed to release credit' }, 500, cors)
+  }
+}
+
+async function handleRelay(request, env, cors) {
+  if (request.method !== 'POST') return methodNotAllowed(cors)
+
+  // Authenticate: shared secret (Shortcut) OR Firebase ID token (app).
+  const principal = await authenticate(request, env)
+  const secretOk = isAuthorized(request, env)
+  if (!principal && !secretOk) {
+    console.warn('Relay rejected: missing or invalid credentials')
+    return unauthorized(cors)
+  }
+
+  if (principal) {
+    const rl = await rateLimit(env, `uid:${principal.uid}`, API_USER_LIMIT, WINDOW_MS)
+    if (rl.limited) return rateLimited(cors, rl)
+  } else {
+    const cf = request.cf || {}
+    const ip = cf.connectingIp || 'unknown'
+    const rl = await rateLimit(env, `ip:${ip}`, RELAY_IP_LIMIT, WINDOW_MS)
+    if (rl.limited) return rateLimited(cors, rl)
+  }
+
+  let url, userId
+  const bodyText = await request.text()
+  try {
+    const parsed = JSON.parse(bodyText)
+    url = parsed.url
+    userId = parsed.userId
+  } catch {
+    const params = new URLSearchParams(bodyText)
+    url = params.get('url')
+    userId = params.get('userId')
+  }
+
+  // An authenticated caller's identity comes from the token, never the body.
+  if (principal) userId = principal.uid
+
+  console.log('Relay received:', { url: url?.slice(0, 80), userId: userId?.slice(0, 20), bodyLen: bodyText.length })
+
+  if (!url || !userId) {
+    return json({ error: 'Missing url or userId' }, 400, cors)
+  }
+
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(userId)) {
+    return json({ error: 'Invalid userId' }, 400, cors)
+  }
+
+  if (!/^https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p)\/[\w-]+/.test(url)) {
+    return json({ error: 'Not a valid Instagram reel URL' }, 400, cors)
+  }
+
+  try {
+    await writePendingUrl(env, userId, url)
+    return json({ ok: true, message: 'URL saved. Open Reel Brain to see it processing.' }, 200, cors)
+  } catch (e) {
+    console.error('Relay error:', e)
+    return json({ error: 'Internal server error' }, 500, cors)
+  }
+}
+
+// ---- Auth helpers ----
+
+async function authenticate(request, env) {
+  const header = request.headers.get('Authorization')
+  if (!header || !header.startsWith('Bearer ')) return null
+  return verifyIdToken(header.slice(7), env.FIREBASE_PROJECT_ID)
 }
 
 function isAuthorized(request, env) {
@@ -144,101 +189,33 @@ function secureCompare(a, b) {
   return diff === 0
 }
 
-// ---- JWT / Service Account Auth ----
+// ---- Response helpers ----
 
-async function getAccessToken(env) {
-  const email = env.FIREBASE_CLIENT_EMAIL
-  const keyRaw = env.FIREBASE_PRIVATE_KEY
-
-  if (!email || !keyRaw) {
-    console.error('getAccessToken: missing FIREBASE_CLIENT_EMAIL or FIREBASE_PRIVATE_KEY')
-    return null
-  }
-
-  const keyData = decodePrivateKey(keyRaw)
-  if (!keyData) {
-    console.error('getAccessToken: could not decode private key')
-    return null
-  }
-
-  const now = Math.floor(Date.now() / 1000)
-  const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
-  const payload = base64url(JSON.stringify({
-    iss: email,
-    scope: 'https://www.googleapis.com/auth/datastore',
-    aud: 'https://oauth2.googleapis.com/token',
-    exp: now + 3600,
-    iat: now,
-  }))
-
-  const signingInput = new TextEncoder().encode(`${header}.${payload}`)
-  const key = await crypto.subtle.importKey(
-    'pkcs8',
-    keyData,
-    { name: 'RSASSA-PKCS1-v1_5', hash: { name: 'SHA-256' } },
-    false,
-    ['sign'],
-  )
-  const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, signingInput)
-  const sig = base64url(new Uint8Array(signature))
-
-  const assertion = `${header}.${payload}.${sig}`
-
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${encodeURIComponent(assertion)}`,
+function json(body, status, cors, extraHeaders = {}) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...cors, ...extraHeaders },
   })
-
-  const data = await res.json()
-  if (!data.access_token) {
-    console.error('getAccessToken failed:', res.status, data.error, data.error_description)
-    return null
-  }
-  return data.access_token
 }
 
-// ---- Key decoding: handles both raw PEM and base64-encoded PEM ----
-
-function decodePrivateKey(input) {
-  const trimmed = input.trim()
-
-  if (trimmed.startsWith('-----BEGIN')) {
-    return pemToBytes(trimmed)
-  }
-
-  try {
-    const decoded = atob(trimmed)
-    if (decoded.startsWith('-----BEGIN')) {
-      return pemToBytes(decoded)
-    }
-    return pemToBytes(decoded)
-  } catch {
-    return pemToBytes(trimmed)
-  }
+function methodNotAllowed(cors) {
+  return json({ error: 'Method not allowed' }, 405, cors)
 }
 
-function pemToBytes(pem) {
-  const b64 = pem
-    .replace(/-----BEGIN [^-]+-----/g, '')
-    .replace(/-----END [^-]+-----/g, '')
-    .replace(/\s/g, '')
-  const binary = atob(b64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes.buffer
+function unauthorized(cors) {
+  return json({ error: 'Unauthorized' }, 401, cors)
 }
 
-// ---- base64url encoding (RFC 4648, no padding, URL-safe) ----
+function rateLimited(cors, rl) {
+  return json({ error: 'Rate limited' }, 429, cors, {
+    'Retry-After': String(Math.max(1, Math.ceil(rl.retryAfterMs / 1000))),
+  })
+}
 
-function base64url(input) {
-  let bytes
-  if (typeof input === 'string') {
-    bytes = new TextEncoder().encode(input)
-  } else {
-    bytes = input
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': 'https://mevikrampawar.github.io',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Relay-Secret',
   }
-  let binary = ''
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }

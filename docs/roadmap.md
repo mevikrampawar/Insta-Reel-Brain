@@ -51,6 +51,14 @@ Also done as part of Phase 0: knowledge graph reworked to a single 2D brain-like
 Grow the Cloudflare Worker into the backend. Dual-mode: new users default to server-backed; existing BYOK users keep working (toggle in Settings).
 
 - **2a. Worker API foundation** — Firebase ID-token verification (JWKS), typed `/api/*` routes, server-side key vault (provider keys in Worker secrets/KV; per-user keys encrypted), entitlements/credits ledger in Firestore (transactional), per-user rate limits.
+
+  **Done (this pass):**
+  - ✅ Firebase ID-token verification — RS256 signature checked against Google's JWKS, `aud`/`iss`/`exp` validated, keys cached 1h with in-flight dedupe (`worker/auth.js`).
+  - ✅ Typed routes: `POST /api/relay`, `GET /api/me`, `POST /api/usage/reserve`, `POST /api/usage/release`; relay accepts shared secret **or** ID token (identity from token, never the body) (`worker/index.js`).
+  - ✅ Per-user (Bearer) + per-IP (relay) fixed-window rate limits via KV with in-memory fallback (`worker/ratelimit.js`, `RATE_LIMIT_KV` bound in `wrangler.jsonc`).
+  - ✅ Server-side credits ledger — `masterKeyUsage` mutated via Firestore REST readWrite transactions (begin/read/commit/rollback with retry on abort); client `ApiKeyContext` now prefers the worker and falls back to the old client-side transaction when the worker is unconfigured (`worker/firestore.js`, `src/services/relay.ts`, `src/config/relay.ts`).
+  - ⬜ **Remaining:** server-side key vault — provider keys in Worker secrets; **per-user keys encrypted** at rest + migration of existing plaintext BYOK keys (deferred; needs careful design to not break BYOK users).
+
 - **2b. Server-side ingestion** — move Apify→Groq→Firestore into the worker with a real queue (Durable Object): webhook completion, retries, dedup, abort-on-cancel.
 - **2c. Client migration** — default capture flow calls the worker; job progress streams back; BYOK path behind the toggle.
 - **2d. Push infra** — VAPID in the worker, subscription storage, `sw.js` push handler (iOS 16.4+, Android, desktop).
